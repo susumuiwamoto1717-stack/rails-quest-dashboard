@@ -892,9 +892,124 @@
           grid-template-columns: 1fr;
         }
       }
+
+      /* ===== Gate Screen ===== */
+      #gateScreen {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        background: #0a0a0f;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-family: "Zen Maru Gothic", sans-serif;
+      }
+      #gateScreen .gate-title {
+        font-size: 2rem;
+        color: #c8a86e;
+        letter-spacing: 0.3em;
+        margin-bottom: 8px;
+        text-shadow: 0 0 20px rgba(200, 168, 110, 0.5);
+        animation: gatePulse 3s ease-in-out infinite;
+      }
+      #gateScreen .gate-subtitle {
+        font-size: 0.85rem;
+        color: #666;
+        margin-bottom: 32px;
+      }
+      #gateScreen .gate-input-wrap {
+        position: relative;
+        margin-bottom: 16px;
+      }
+      #gateScreen .gate-input {
+        background: transparent;
+        border: 1px solid #333;
+        border-radius: 8px;
+        color: #c8a86e;
+        font-size: 1.1rem;
+        padding: 12px 20px;
+        width: 260px;
+        text-align: center;
+        letter-spacing: 0.2em;
+        font-family: "Zen Maru Gothic", sans-serif;
+        outline: none;
+        transition:
+          border-color 0.3s,
+          box-shadow 0.3s;
+      }
+      #gateScreen .gate-input:focus {
+        border-color: #c8a86e;
+        box-shadow: 0 0 15px rgba(200, 168, 110, 0.3);
+      }
+      #gateScreen .gate-input::placeholder {
+        color: #444;
+        letter-spacing: 0.1em;
+      }
+      #gateScreen .gate-btn {
+        background: transparent;
+        border: 1px solid #c8a86e;
+        color: #c8a86e;
+        padding: 10px 40px;
+        border-radius: 8px;
+        font-size: 1rem;
+        cursor: pointer;
+        letter-spacing: 0.2em;
+        font-family: "Zen Maru Gothic", sans-serif;
+        transition: all 0.3s;
+      }
+      #gateScreen .gate-btn:hover {
+        background: rgba(200, 168, 110, 0.15);
+        box-shadow: 0 0 20px rgba(200, 168, 110, 0.3);
+      }
+      #gateScreen .gate-error {
+        color: #e05555;
+        font-size: 0.85rem;
+        margin-top: 12px;
+        min-height: 1.2em;
+      }
+      #gateScreen .gate-notice {
+        position: absolute;
+        bottom: 40px;
+        color: #444;
+        font-size: 0.75rem;
+        text-align: center;
+        line-height: 1.6;
+      }
+      @keyframes gatePulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.7;
+        }
+      }
     </style>
   </head>
   <body>
+    <!-- ===== Gate Screen ===== -->
+    <div id="gateScreen">
+      <div class="gate-title">呪文を唱えよ</div>
+      <div class="gate-subtitle">扉を開く言葉を入力せよ</div>
+      <div class="gate-input-wrap">
+        <input
+          type="password"
+          class="gate-input"
+          id="gateInput"
+          placeholder="..."
+          autocomplete="off"
+          onkeydown="if (event.key === 'Enter') openGate();"
+        />
+      </div>
+      <button class="gate-btn" onclick="openGate()">開門</button>
+      <div class="gate-error" id="gateError"></div>
+      <div class="gate-notice">
+        RUNTEQ 受講者・卒業生限定<br />
+        許可なき者、この先へは進めぬ
+      </div>
+    </div>
+
     <!-- ===== Header ===== -->
     <div class="header">
       <div>
@@ -4734,7 +4849,27 @@ ${allRecordsText}`;
         }
       });
 
-      init();
+      // ===== Gate =====
+      function openGate() {
+        const input = document.getElementById("gateInput").value;
+        if (input.toLowerCase() === "runteq") {
+          sessionStorage.setItem("rq_gate_passed", "1");
+          document.getElementById("gateScreen").style.display = "none";
+          init();
+        } else {
+          document.getElementById("gateError").textContent =
+            "呪文が違う...もう一度唱えよ";
+          document.getElementById("gateInput").value = "";
+          document.getElementById("gateInput").focus();
+        }
+      }
+
+      if (sessionStorage.getItem("rq_gate_passed") === "1") {
+        document.getElementById("gateScreen").style.display = "none";
+        init();
+      } else {
+        document.getElementById("gateInput").focus();
+      }
     </script>
   </body>
 </html>
