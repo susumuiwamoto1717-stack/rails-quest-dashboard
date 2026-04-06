@@ -1,0 +1,4534 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; img-src 'self' data:;"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <title>Rails Quest — ペルソナプロンプト生成</title>
+    <style>
+      :root {
+        --primary: #3aade0;
+        --primary-dark: #2890be;
+        --accent: #f59e0b;
+        --bg: #f3f4f6;
+        --card: #ffffff;
+        --text: #1f2937;
+        --text-light: #6b7280;
+        --success: #10b981;
+        --border: #e5e7eb;
+        --radius: 12px;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          "Zen Maru Gothic",
+          "Hiragino Sans",
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+        font-size: 14px;
+      }
+
+      /* ===== Status Bar ===== */
+      .status-bar {
+        display: none;
+        background: #1a1a2e;
+        color: white;
+        padding: 8px 32px;
+        font-size: 13px;
+        align-items: center;
+        gap: 20px;
+      }
+      .status-bar.visible {
+        display: flex;
+      }
+      .status-lv {
+        color: #f59e0b;
+        font-weight: 700;
+        font-size: 15px;
+      }
+      .status-title {
+        color: #9ca3af;
+      }
+      .status-exp-bar {
+        flex: 1;
+        max-width: 200px;
+        height: 6px;
+        background: #374151;
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .status-exp-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #f59e0b, #fbbf24);
+        border-radius: 3px;
+        transition: width 0.5s;
+      }
+      .status-exp-text {
+        color: #9ca3af;
+        font-size: 11px;
+      }
+      .status-streak {
+        margin-left: auto;
+        color: #f59e0b;
+      }
+
+      /* ===== Calendar ===== */
+      .calendar-panel {
+        background: var(--card);
+        border-radius: var(--radius);
+        padding: 24px 28px;
+        margin-bottom: 28px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+      }
+      .calendar-panel h3 {
+        font-size: 17px;
+        font-weight: 700;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .calendar-dow {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        text-align: center;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-light);
+        margin-bottom: 4px;
+        padding: 6px 0;
+      }
+      .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 3px;
+      }
+      .calendar-cell {
+        aspect-ratio: 1;
+        border-radius: 5px;
+        background: #f3f4f6;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-light);
+        max-height: 44px;
+      }
+      .calendar-cell.today {
+        outline: 2px solid #f59e0b;
+        outline-offset: -1px;
+        font-weight: 700;
+        color: var(--text);
+        background: #fffbeb;
+      }
+      .calendar-cell.lv1 {
+        background: #9be9a8;
+      }
+      .calendar-cell.lv2 {
+        background: #40c463;
+      }
+      .calendar-cell.lv3 {
+        background: #30a14e;
+      }
+      .calendar-cell.lv4 {
+        background: #216e39;
+      }
+      .calendar-cell[title] {
+        cursor: help;
+      }
+      .calendar-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 10px;
+        font-size: 12px;
+        color: var(--text-light);
+      }
+      .streak-badge {
+        background: #fef3c7;
+        color: #92400e;
+        padding: 2px 10px;
+        border-radius: 10px;
+        font-weight: 600;
+      }
+
+      /* ===== EXP Toast ===== */
+      .exp-toast {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        background: #1a1a2e;
+        color: #f59e0b;
+        padding: 12px 20px;
+        border-radius: 10px;
+        font-size: 14px;
+        font-weight: 700;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        z-index: 9000;
+        animation:
+          toastIn 0.3s ease,
+          toastOut 0.3s ease 1.7s forwards;
+      }
+      @keyframes toastIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @keyframes toastOut {
+        from {
+          opacity: 1;
+        }
+        to {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+      }
+
+      /* ===== Header ===== */
+      .header {
+        background: linear-gradient(
+          135deg,
+          var(--primary),
+          var(--primary-dark)
+        );
+        color: white;
+        padding: 24px 32px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+      .header h1 {
+        font-size: 24px;
+        font-weight: 700;
+      }
+      .header .subtitle {
+        font-size: 14px;
+        opacity: 0.85;
+        margin-top: 2px;
+      }
+      .header .badge {
+        background: var(--accent);
+        color: #1f2937;
+        font-size: 12px;
+        font-weight: 700;
+        padding: 4px 12px;
+        border-radius: 20px;
+      }
+
+      /* ===== Setup Panel ===== */
+      .setup-panel {
+        max-width: 640px;
+        margin: 40px auto;
+        background: var(--card);
+        border-radius: var(--radius);
+        padding: 32px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+      }
+      .setup-panel h2 {
+        font-size: 20px;
+        margin-bottom: 24px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .form-group {
+        margin-bottom: 20px;
+      }
+      .form-group label {
+        display: block;
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 6px;
+        color: var(--text);
+      }
+      .form-group .hint {
+        font-size: 12px;
+        color: var(--text-light);
+        margin-bottom: 6px;
+      }
+      .form-group input {
+        width: 100%;
+        padding: 12px 16px;
+        border: 2px solid var(--border);
+        border-radius: 8px;
+        font-size: 16px;
+        transition: border-color 0.2s;
+        outline: none;
+      }
+      .form-group input:focus {
+        border-color: var(--primary);
+      }
+      .form-group input[disabled] {
+        background: #f9fafb;
+        color: var(--text-light);
+      }
+      .form-group .fixed-tag {
+        display: inline-block;
+        background: #eef2ff;
+        color: var(--primary-dark);
+        font-size: 12px;
+        padding: 2px 8px;
+        border-radius: 4px;
+        margin-left: 8px;
+      }
+
+      .btn-start {
+        width: 100%;
+        padding: 14px;
+        background: linear-gradient(
+          135deg,
+          var(--primary),
+          var(--primary-dark)
+        );
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 700;
+        cursor: pointer;
+        transition:
+          transform 0.1s,
+          box-shadow 0.2s;
+        margin-top: 8px;
+      }
+      .btn-start:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(58, 173, 224, 0.3);
+      }
+      .btn-start:active {
+        transform: translateY(0);
+      }
+
+      /* ===== Main Content ===== */
+      .main {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 32px 24px;
+      }
+
+      .step-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 24px;
+      }
+      .step-header h2 {
+        font-size: 22px;
+      }
+      .step-badge {
+        background: var(--primary);
+        color: white;
+        padding: 4px 16px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .progress-bar-container {
+        background: var(--border);
+        border-radius: 10px;
+        height: 8px;
+        margin-bottom: 32px;
+        overflow: hidden;
+      }
+      .progress-bar-fill {
+        height: 100%;
+        background: var(--accent);
+        border-radius: 10px;
+        transition: width 0.5s;
+      }
+
+      /* ===== Card Grid ===== */
+      .card-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 20px;
+      }
+
+      .card {
+        background: var(--card);
+        border-radius: var(--radius);
+        overflow: hidden;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+        cursor: pointer;
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s;
+        position: relative;
+      }
+      .card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+      }
+      .card-banner {
+        background: linear-gradient(
+          135deg,
+          var(--primary),
+          var(--primary-dark)
+        );
+        color: white;
+        padding: 16px 20px;
+        font-size: 15px;
+        font-weight: 700;
+      }
+      .card-body {
+        padding: 20px;
+      }
+      .card-body p {
+        font-size: 13px;
+        color: var(--text-light);
+        margin-bottom: 12px;
+        min-height: 40px;
+      }
+      .card-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 12px;
+        color: var(--text-light);
+      }
+      .card-chapters {
+        background: #f3f4f6;
+        padding: 3px 10px;
+        border-radius: 4px;
+      }
+      .card-time {
+        font-weight: 600;
+      }
+      .card-status {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+      }
+      .card-status.done {
+        background: var(--success);
+        color: white;
+      }
+      .card-status.current {
+        background: var(--accent);
+        color: white;
+      }
+      .card-status.locked {
+        background: var(--border);
+        color: var(--text-light);
+      }
+
+      /* ===== Modal ===== */
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 100;
+        justify-content: center;
+        align-items: flex-start;
+        padding: 40px 20px;
+        overflow-y: auto;
+      }
+      .modal-overlay.active {
+        display: flex;
+      }
+
+      .modal {
+        background: var(--card);
+        border-radius: var(--radius);
+        max-width: 800px;
+        width: 100%;
+        max-height: calc(100vh - 80px);
+        overflow-y: auto;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+      }
+      .modal-header {
+        background: linear-gradient(
+          135deg,
+          var(--primary),
+          var(--primary-dark)
+        );
+        color: white;
+        padding: 20px 28px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+      .modal-header h3 {
+        font-size: 18px;
+      }
+      .modal-close {
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        color: white;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        font-size: 18px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .modal-close:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+
+      .modal-body {
+        padding: 28px;
+      }
+
+      .prompt-output {
+        background: #1f2937;
+        color: #e5e7eb;
+        border-radius: 8px;
+        padding: 20px;
+        font-family: "SF Mono", "Fira Code", monospace;
+        font-size: 13px;
+        line-height: 1.7;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 400px;
+        overflow-y: auto;
+        margin-bottom: 16px;
+      }
+
+      .btn-copy {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        padding: 14px;
+        background: var(--success);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .btn-copy:hover {
+        background: #059669;
+      }
+      .btn-copy.copied {
+        background: #6b7280;
+      }
+
+      /* ===== Chapter List inside Modal ===== */
+      .chapter-list {
+        list-style: none;
+        margin: 20px 0;
+      }
+      .chapter-list li {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 14px;
+      }
+      .chapter-list li:last-child {
+        border-bottom: none;
+      }
+      .chapter-num {
+        background: var(--primary);
+        color: white;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+        flex-shrink: 0;
+      }
+      .chapter-time {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--text-light);
+      }
+
+      /* ===== Tabs in modal ===== */
+      .tab-bar {
+        display: flex;
+        border-bottom: 2px solid var(--border);
+        margin-bottom: 20px;
+      }
+      .tab-btn {
+        padding: 10px 20px;
+        background: none;
+        border: none;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-light);
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -2px;
+        transition: color 0.2s;
+      }
+      .tab-btn.active {
+        color: var(--primary);
+        border-bottom-color: var(--primary);
+      }
+      .tab-content {
+        display: none;
+      }
+      .tab-content.active {
+        display: block;
+      }
+
+      /* ===== Persona Preview ===== */
+      .persona-preview {
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        border-radius: 8px;
+        padding: 16px 20px;
+        margin-bottom: 16px;
+      }
+      .persona-preview .char {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        font-weight: 700;
+      }
+      .persona-preview .speech {
+        font-size: 14px;
+        color: #92400e;
+        padding-left: 28px;
+      }
+
+      /* ===== Hidden Key in Prompt ===== */
+      .hidden-key {
+        color: #1f2937;
+        background: #1f2937;
+        transition: all 0.3s;
+        border-radius: 2px;
+        padding: 0 2px;
+      }
+      .hidden-key:hover {
+        color: #fbbf24;
+        background: #374151;
+      }
+
+      /* ===== Locked Card ===== */
+      .card.is-locked {
+        opacity: 0.55;
+        filter: grayscale(0.3);
+        cursor: not-allowed;
+      }
+      .card.is-locked:hover {
+        transform: none;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+      }
+      .card.is-locked .card-banner {
+        background: linear-gradient(135deg, #6b7280, #4b5563);
+      }
+
+      /* ===== Key Input ===== */
+      .key-input-area {
+        text-align: center;
+        padding: 24px 0;
+      }
+      .key-icon {
+        font-size: 48px;
+        margin-bottom: 12px;
+      }
+      .key-input-area p {
+        font-size: 14px;
+        color: var(--text-light);
+        margin-bottom: 16px;
+      }
+      .key-form {
+        display: flex;
+        gap: 8px;
+        max-width: 400px;
+        margin: 0 auto;
+      }
+      .key-form input {
+        flex: 1;
+        padding: 12px 16px;
+        border: 2px solid var(--border);
+        border-radius: 8px;
+        font-size: 16px;
+        outline: none;
+        transition: border-color 0.2s;
+      }
+      .key-form input:focus {
+        border-color: var(--accent);
+      }
+      .key-form button {
+        padding: 12px 20px;
+        background: var(--accent);
+        color: #1f2937;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.2s;
+      }
+      .key-form button:hover {
+        background: #d97706;
+      }
+      .key-result {
+        margin-top: 16px;
+        font-size: 14px;
+        font-weight: 600;
+        min-height: 24px;
+      }
+      .key-result.success {
+        color: var(--success);
+      }
+      .key-result.fail {
+        color: #ef4444;
+      }
+
+      /* ===== Unlock Animation ===== */
+      @keyframes unlockPulse {
+        0% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.08);
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+      .card.just-unlocked {
+        animation: unlockPulse 0.6s ease;
+        box-shadow: 0 0 20px rgba(245, 158, 11, 0.5);
+      }
+
+      /* ===== Locked Modal Message ===== */
+      .locked-message {
+        text-align: center;
+        padding: 48px 24px;
+      }
+      .locked-message .lock-icon {
+        font-size: 64px;
+        margin-bottom: 16px;
+      }
+      .locked-message h3 {
+        font-size: 18px;
+        margin-bottom: 12px;
+        color: var(--text);
+      }
+      .locked-message p {
+        font-size: 14px;
+        color: var(--text-light);
+        line-height: 1.8;
+      }
+
+      /* ===== Prep Checklist ===== */
+      .prep-panel {
+        background: var(--card);
+        border-radius: var(--radius);
+        padding: 28px 32px;
+        margin-bottom: 36px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+        border-left: 4px solid var(--accent);
+        transition:
+          opacity 0.4s,
+          max-height 0.5s;
+        overflow: hidden;
+      }
+      .prep-panel.completed {
+        border-left-color: var(--success);
+      }
+      .prep-panel h2 {
+        font-size: 18px;
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .prep-panel .prep-subtitle {
+        font-size: 13px;
+        color: var(--text-light);
+        margin-bottom: 20px;
+      }
+      .prep-item {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 14px 16px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        transition: background 0.15s;
+        user-select: none;
+      }
+      .prep-item:hover {
+        background: #f9fafb;
+      }
+      .prep-item:last-child {
+        margin-bottom: 0;
+      }
+      .prep-checkbox {
+        width: 26px;
+        height: 26px;
+        border: 2px solid var(--border);
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        font-size: 14px;
+        transition: all 0.2s;
+      }
+      .prep-item.checked .prep-checkbox {
+        background: var(--success);
+        border-color: var(--success);
+        color: white;
+      }
+      .prep-item-icon {
+        font-size: 24px;
+        flex-shrink: 0;
+      }
+      .prep-item-text {
+        flex: 1;
+      }
+      .prep-item-text .prep-name {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .prep-item-text .prep-desc {
+        font-size: 12px;
+        color: var(--text-light);
+        margin-top: 2px;
+      }
+      .prep-item.checked .prep-name {
+        text-decoration: line-through;
+        color: var(--text-light);
+      }
+      .prep-done-msg {
+        display: none;
+        text-align: center;
+        padding: 16px 0 4px;
+      }
+      .prep-done-msg.visible {
+        display: block;
+      }
+      .prep-done-msg p {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--success);
+      }
+      .prep-done-msg .prep-sub {
+        font-size: 13px;
+        color: var(--text-light);
+        font-weight: 400;
+        margin-top: 4px;
+      }
+      .prep-toggle {
+        display: none;
+        background: none;
+        border: none;
+        font-size: 13px;
+        color: var(--primary);
+        cursor: pointer;
+        padding: 4px 0;
+        margin-top: 8px;
+      }
+      .prep-toggle.visible {
+        display: inline-block;
+      }
+
+      /* ===== Responsive ===== */
+      @media (max-width: 640px) {
+        .header {
+          padding: 16px 20px;
+        }
+        .header h1 {
+          font-size: 18px;
+        }
+        .setup-panel {
+          margin: 20px 16px;
+          padding: 24px;
+        }
+        .main {
+          padding: 20px 16px;
+        }
+        .card-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ===== Header ===== -->
+    <div class="header">
+      <div>
+        <h1>Rails Quest</h1>
+        <div class="subtitle">AI Learning Dashboard</div>
+      </div>
+      <span class="badge" id="headerBadge" style="display: none"></span>
+      <button
+        id="profileBtn"
+        style="
+          display: none;
+          background: rgba(255, 255, 255, 0.2);
+          border: none;
+          color: white;
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          font-size: 16px;
+          cursor: pointer;
+          margin-left: auto;
+        "
+        onclick="openProfile()"
+      >
+        &#9881;
+      </button>
+    </div>
+
+    <!-- ===== Status Bar ===== -->
+    <div class="status-bar" id="statusBar">
+      <span class="status-lv" id="statusLv">Lv.1</span>
+      <span class="status-title" id="statusTitle">見習い冒険者</span>
+      <div class="status-exp-bar">
+        <div class="status-exp-fill" id="statusExpFill" style="width: 0%"></div>
+      </div>
+      <span class="status-exp-text" id="statusExpText">0 / 100 EXP</span>
+      <span class="status-streak" id="statusStreak"></span>
+    </div>
+
+    <!-- ===== Auth Panel ===== -->
+    <div class="setup-panel" id="setupPanel">
+      <!-- Tab: Register / Login -->
+      <div
+        id="authTabs"
+        style="
+          display: flex;
+          gap: 0;
+          margin-bottom: 24px;
+          border-bottom: 2px solid var(--border);
+        "
+      >
+        <button
+          class="tab-btn active"
+          onclick="switchAuthTab('register', this)"
+          style="
+            flex: 1;
+            border-bottom: 2px solid var(--primary);
+            margin-bottom: -2px;
+          "
+        >
+          新規登録
+        </button>
+        <button
+          class="tab-btn"
+          onclick="switchAuthTab('login', this)"
+          style="flex: 1; margin-bottom: -2px"
+        >
+          ログイン
+        </button>
+      </div>
+
+      <!-- Register -->
+      <div id="authRegister">
+        <h2>&#9876; 冒険者登録</h2>
+        <div class="form-group">
+          <label for="regName">冒険者名</label>
+          <div class="hint">あなたの名前を入力してください</div>
+          <input
+            type="text"
+            id="regName"
+            placeholder="例: タケル"
+            autocomplete="off"
+          />
+        </div>
+        <div class="form-group">
+          <label for="regMaster">師匠の名前</label>
+          <div class="hint">あなたを導く師匠の名前を決めてください</div>
+          <input
+            type="text"
+            id="regMaster"
+            placeholder="例: RAN"
+            autocomplete="off"
+          />
+        </div>
+        <div class="form-group">
+          <label>AI講師ロボット <span class="fixed-tag">固定</span></label>
+          <input type="text" value="&#129302; ロボらんてくん" disabled />
+        </div>
+        <div
+          id="regError"
+          style="
+            color: #ef4444;
+            font-size: 13px;
+            margin-bottom: 8px;
+            min-height: 20px;
+          "
+        ></div>
+        <button class="btn-start" onclick="registerUser()">
+          冒険者登録する
+        </button>
+      </div>
+
+      <!-- Login -->
+      <div id="authLogin" style="display: none">
+        <h2>&#128274; 冒険の続きへ</h2>
+        <div class="form-group">
+          <label for="loginName">冒険者名</label>
+          <input
+            type="text"
+            id="loginName"
+            placeholder="登録した名前"
+            autocomplete="off"
+          />
+        </div>
+        <div
+          id="loginError"
+          style="
+            color: #ef4444;
+            font-size: 13px;
+            margin-bottom: 8px;
+            min-height: 20px;
+          "
+        ></div>
+        <button class="btn-start" onclick="loginUser()">ログインする</button>
+      </div>
+    </div>
+
+    <!-- ===== Profile Modal ===== -->
+    <div
+      class="modal-overlay"
+      id="profileOverlay"
+      onclick="closeProfile(event)"
+    >
+      <div
+        class="modal"
+        onclick="event.stopPropagation()"
+        style="max-width: 480px"
+      >
+        <div class="modal-header">
+          <h3>&#9881; プロフィール設定</h3>
+          <button class="modal-close" onclick="closeProfile()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="editName">冒険者名</label>
+            <input type="text" id="editName" />
+          </div>
+          <div class="form-group">
+            <label for="editMaster">師匠の名前</label>
+            <input type="text" id="editMaster" />
+          </div>
+          <button
+            class="btn-start"
+            style="margin-bottom: 12px"
+            onclick="saveProfile()"
+          >
+            変更を保存する
+          </button>
+          <hr
+            style="
+              border: none;
+              border-top: 1px solid var(--border);
+              margin: 16px 0;
+            "
+          />
+          <button
+            class="btn-start"
+            style="background: #ef4444; font-size: 13px; padding: 10px"
+            onclick="confirmReset()"
+          >
+            &#9888; 全データをリセットして最初からやり直す
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Main Dashboard (Hidden initially) ===== -->
+    <div class="main" id="mainDashboard" style="display: none">
+      <!-- ===== Prep Checklist ===== -->
+      <div class="prep-panel" id="prepPanel">
+        <h2>&#9876;&#65039; 冒険の準備 — 出発前チェック</h2>
+        <div class="prep-subtitle">
+          冒険に出る前に、3つの道具が揃っているか確認しよう
+        </div>
+
+        <div class="prep-item" onclick="togglePrep(0)">
+          <div class="prep-checkbox" id="prepCheck0"></div>
+          <div class="prep-item-icon">&#128187;</div>
+          <div class="prep-item-text">
+            <div class="prep-name">Cursor（エディタ / ターミナル）</div>
+            <div class="prep-desc">
+              コードを書く武器。起動してワークスペースを開いておこう
+            </div>
+          </div>
+        </div>
+
+        <div class="prep-item" onclick="togglePrep(1)">
+          <div class="prep-checkbox" id="prepCheck1"></div>
+          <div class="prep-item-icon">&#129302;</div>
+          <div class="prep-item-text">
+            <div class="prep-name">AIツール（Claude Web など）</div>
+            <div class="prep-desc">
+              呪文を唱える場所。ブラウザで開いておこう
+            </div>
+          </div>
+        </div>
+
+        <div class="prep-item" onclick="togglePrep(2)">
+          <div class="prep-checkbox" id="prepCheck2"></div>
+          <div class="prep-item-icon">&#128218;</div>
+          <div class="prep-item-text">
+            <div class="prep-name">RUNTEQのウェブサイト</div>
+            <div class="prep-desc">
+              <a
+                href="https://school.runteq.jp/v3/curriculums"
+                target="_blank"
+                style="color: var(--primary)"
+                onclick="event.stopPropagation()"
+                >school.runteq.jp</a
+              >
+              にログインしてカリキュラムを開こう
+            </div>
+          </div>
+        </div>
+
+        <div class="prep-done-msg" id="prepDoneMsg">
+          <p>&#10024; 準備完了！ 冒険に出発できるぞ！</p>
+          <div class="prep-sub">
+            下のカードから呪文を授かって、学習を始めよう
+          </div>
+        </div>
+        <button class="prep-toggle" id="prepToggle" onclick="togglePrepPanel()">
+          &#9650; 準備チェックを閉じる
+        </button>
+      </div>
+
+      <!-- ===== Calendar ===== -->
+      <div class="calendar-panel" id="calendarPanel">
+        <h3>&#128197; <span id="calMonthLabel"></span> の学習記録</h3>
+        <div class="calendar-dow">
+          <span>日</span><span>月</span><span>火</span><span>水</span
+          ><span>木</span><span>金</span><span>土</span>
+        </div>
+        <div id="calendarGrid" class="calendar-grid"></div>
+        <div class="calendar-meta" style="margin-top: 12px">
+          <span id="calendarTotal" style="font-size: 14px">今月 0 日学習</span>
+          <span class="streak-badge" id="calendarStreak" style="font-size: 13px"
+            >&#128293; 0日連続</span
+          >
+        </div>
+        <div
+          style="
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 10px;
+          "
+        >
+          <button
+            onclick="changeCalMonth(-1)"
+            style="
+              background: none;
+              border: 1px solid var(--border);
+              border-radius: 6px;
+              padding: 5px 14px;
+              cursor: pointer;
+              font-size: 13px;
+              font-family: inherit;
+            "
+          >
+            &lt; 先月
+          </button>
+          <button
+            onclick="changeCalMonth(1)"
+            style="
+              background: none;
+              border: 1px solid var(--border);
+              border-radius: 6px;
+              padding: 5px 14px;
+              cursor: pointer;
+              font-size: 13px;
+              font-family: inherit;
+            "
+          >
+            翌月 &gt;
+          </button>
+        </div>
+      </div>
+
+      <!-- 入門STEP: Ruby -->
+      <section id="section-ruby-beginner">
+        <div class="step-header">
+          <h2>入門STEP — Ruby入門</h2>
+          <span class="step-badge">全11章・24時間</span>
+        </div>
+        <div class="progress-bar-container">
+          <div
+            class="progress-bar-fill"
+            id="progress-rubyBeginner"
+            style="width: 0%"
+          ></div>
+        </div>
+        <div class="card-grid" id="rubyBeginnerCards"></div>
+      </section>
+
+      <div style="height: 48px"></div>
+
+      <!-- 入門STEP: Rails -->
+      <section id="section-rails-beginner">
+        <div class="step-header">
+          <h2>入門STEP — Rails入門①②</h2>
+          <span class="step-badge">全11章・48時間</span>
+        </div>
+        <div class="progress-bar-container">
+          <div
+            class="progress-bar-fill"
+            id="progress-railsBeginner"
+            style="width: 0%"
+          ></div>
+        </div>
+        <div class="card-grid" id="railsBeginnerCards"></div>
+      </section>
+
+      <div style="height: 48px"></div>
+
+      <!-- 基礎STEP: Rails -->
+      <section id="section-rails-basic">
+        <div class="step-header">
+          <h2>基礎STEP — Rails基礎①②</h2>
+          <span class="step-badge">全24章・191時間</span>
+        </div>
+        <div class="progress-bar-container">
+          <div
+            class="progress-bar-fill"
+            id="progress-railsBasic"
+            style="width: 0%"
+          ></div>
+        </div>
+        <div class="card-grid" id="railsBasicCards"></div>
+      </section>
+
+      <div style="height: 48px"></div>
+
+      <!-- 基礎STEP: Ruby -->
+      <section id="section-ruby-basic">
+        <div class="step-header">
+          <h2>基礎STEP — Rubyで学ぶアルゴリズム</h2>
+          <span class="step-badge">全3章・15時間</span>
+        </div>
+        <div class="progress-bar-container">
+          <div
+            class="progress-bar-fill"
+            id="progress-rubyBasic"
+            style="width: 0%"
+          ></div>
+        </div>
+        <div class="card-grid" id="rubyBasicCards"></div>
+      </section>
+    </div>
+
+    <!-- ===== Modal ===== -->
+    <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-header">
+          <h3 id="modalTitle"></h3>
+          <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="tab-bar" id="tabBar">
+            <button
+              class="tab-btn active"
+              onclick="switchTab('overview', this)"
+            >
+              冒険の地図
+            </button>
+            <button class="tab-btn" onclick="switchTab('prompt', this)">
+              呪文を授かる
+            </button>
+            <button class="tab-btn" onclick="switchTab('key', this)">
+              鍵の解放
+            </button>
+            <button class="tab-btn" onclick="switchTab('record', this)">
+              冒険の記録
+            </button>
+          </div>
+
+          <!-- Tab: Overview -->
+          <div class="tab-content active" id="tab-overview">
+            <div class="persona-preview" id="previewRan"></div>
+            <div
+              class="persona-preview"
+              id="previewRobo"
+              style="background: #eff6ff; border-color: #93c5fd"
+            ></div>
+            <h4 style="margin: 20px 0 12px; font-size: 15px">章の一覧</h4>
+            <ul class="chapter-list" id="chapterList"></ul>
+          </div>
+
+          <!-- Tab: Prompt (呪文) -->
+          <div class="tab-content" id="tab-prompt">
+            <div style="text-align: center; padding: 32px 16px">
+              <div style="font-size: 48px; margin-bottom: 12px">&#128220;</div>
+              <h4 style="font-size: 17px; margin-bottom: 8px">
+                封印された呪文
+              </h4>
+              <p
+                style="
+                  font-size: 14px;
+                  color: var(--text-light);
+                  margin-bottom: 20px;
+                  line-height: 1.7;
+                "
+              >
+                この巻物にはAIへの呪文が封じ込められています。<br />
+                コピーしてAI（Claude / Gemini /
+                ChatGPT）に貼り付けて唱えてください。<br />
+                学習が完了すると、AIから<strong>秘密の鍵</strong>が授けられます。
+              </p>
+              <button
+                class="btn-copy"
+                id="btnCopy"
+                onclick="copyPrompt()"
+                style="max-width: 360px; margin: 0 auto"
+              >
+                &#128302; 呪文をコピーする
+              </button>
+              <div
+                id="copyDoneMsg"
+                style="
+                  display: none;
+                  margin-top: 12px;
+                  font-size: 14px;
+                  color: var(--success);
+                  font-weight: 600;
+                "
+              >
+                &#10003; コピーしました！ AIに貼り付けて唱えてください
+              </div>
+            </div>
+            <div id="promptOutput" style="display: none"></div>
+          </div>
+
+          <!-- Tab: Key (鍵の解放) -->
+          <div class="tab-content" id="tab-key">
+            <div class="key-input-area">
+              <div class="key-icon">&#128273;</div>
+              <h4 style="margin-bottom: 8px">秘密の鍵を入力せよ</h4>
+              <p>
+                呪文を唱え、学習を完了すると、AIから<strong>秘密の鍵</strong>が授けられます。<br />
+                その鍵をここに入力すると、次の冒険が解放されます。
+              </p>
+              <div class="key-form">
+                <input
+                  type="text"
+                  id="keyInput"
+                  placeholder="秘密の鍵を入力..."
+                  autocomplete="off"
+                />
+                <button onclick="submitKey()">鍵を試す</button>
+              </div>
+              <div class="key-result" id="keyResult"></div>
+            </div>
+          </div>
+
+          <!-- Tab: Record -->
+          <div class="tab-content" id="tab-record">
+            <div
+              style="
+                background: #eff6ff;
+                border-radius: 8px;
+                padding: 12px 16px;
+                margin-bottom: 12px;
+                font-size: 13px;
+                color: #1e40af;
+                border-left: 3px solid #3b82f6;
+              "
+            >
+              <strong>使い方:</strong> Claude
+              Webでの学習が終わったら「まとめて」と伝えてください。統一フォーマットの報告が出力されるので、それをここに貼り付けて保存します。
+            </div>
+            <textarea
+              id="recordArea"
+              style="
+                width: 100%;
+                min-height: 200px;
+                padding: 12px;
+                border: 2px solid var(--border);
+                border-radius: 8px;
+                font-size: 14px;
+                font-family: inherit;
+                resize: vertical;
+              "
+              placeholder="Claude Webの「学習セッション報告」をここに貼り付け..."
+            ></textarea>
+            <div style="display: flex; gap: 8px; margin-top: 12px">
+              <button
+                class="btn-start"
+                style="flex: 1; font-size: 14px; padding: 10px"
+                onclick="saveRecord()"
+              >
+                記録を保存
+              </button>
+              <button
+                class="btn-start"
+                style="
+                  flex: 1;
+                  font-size: 14px;
+                  padding: 10px;
+                  background: var(--accent);
+                "
+                onclick="exportRecord()"
+              >
+                このカードの分析
+              </button>
+            </div>
+            <div id="savedRecords" style="margin-top: 20px"></div>
+            <div
+              style="
+                margin-top: 20px;
+                padding-top: 20px;
+                border-top: 2px solid var(--border);
+              "
+            >
+              <button
+                class="btn-start"
+                style="
+                  font-size: 14px;
+                  padding: 12px;
+                  background: #7c3aed;
+                  width: 100%;
+                "
+                onclick="exportAllRecords()"
+              >
+                全セクション横断分析プロンプト生成
+              </button>
+              <p
+                style="
+                  font-size: 12px;
+                  color: var(--text-light);
+                  margin-top: 6px;
+                  text-align: center;
+                "
+              >
+                全カードの記録を束ねて、強み・弱み・復習ポイントを分析するプロンプトを生成します
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ===== Data =====
+      const CURRICULUM = {
+        rubyBeginner: {
+          title: "Ruby入門",
+          promptKey: "ruby_beginner",
+          chapters: [
+            {
+              num: 1,
+              title: "Rubyを動かす環境構築",
+              time: "2h",
+              status: "locked",
+            },
+            { num: 2, title: "プログラムの基礎", time: "2h", status: "locked" },
+            {
+              num: 3,
+              title: "条件分岐、繰り返し処理",
+              time: "2h",
+              status: "locked",
+            },
+            {
+              num: 4,
+              title: "情報をまとめる配列",
+              time: "2h",
+              status: "locked",
+            },
+            {
+              num: 5,
+              title: "配列で扱うメソッド",
+              time: "2h",
+              status: "locked",
+            },
+            {
+              num: 6,
+              title: "名前と値をセットにするハッシュ",
+              time: "2h",
+              status: "locked",
+            },
+            {
+              num: 7,
+              title: "まとまりを分けるメソッド",
+              time: "2h",
+              status: "locked",
+            },
+            {
+              num: 8,
+              title: "オブジェクトの種類を決めるクラス",
+              time: "3h",
+              status: "locked",
+            },
+            {
+              num: 9,
+              title: "メソッドを共通して使うモジュール",
+              time: "2h",
+              status: "locked",
+            },
+            {
+              num: 10,
+              title: "実際にアプリを作ってみよう",
+              time: "2h",
+              status: "locked",
+            },
+            {
+              num: 11,
+              title: "Rubyの理解をより深めよう",
+              time: "3h",
+              status: "locked",
+            },
+          ],
+          description: "RUNTEQ Booksを活用しながらRubyの基礎を学習",
+          cards: [
+            {
+              title: "環境構築",
+              desc: "Rubyの実行環境を整える",
+              chapters: "1章",
+              time: "2h",
+            },
+            {
+              title: "プログラムの基礎",
+              desc: "変数・式展開・irbの基本",
+              chapters: "2章",
+              time: "2h",
+            },
+            {
+              title: "条件分岐・繰り返し",
+              desc: "if/elsif/else、times/while",
+              chapters: "3章",
+              time: "2h",
+            },
+            {
+              title: "情報をまとめる配列",
+              desc: "配列の基本操作とeachメソッド",
+              chapters: "4章",
+              time: "2h",
+            },
+            {
+              title: "配列メソッド",
+              desc: "map/select/findで配列を操る",
+              chapters: "5章",
+              time: "2h",
+            },
+            {
+              title: "ハッシュ",
+              desc: "名前と値をセットにするデータ構造",
+              chapters: "6章",
+              time: "2h",
+            },
+            {
+              title: "メソッド",
+              desc: "処理をまとめて名前をつける",
+              chapters: "7章",
+              time: "2h",
+            },
+            {
+              title: "クラス",
+              desc: "オブジェクトの設計図を作る",
+              chapters: "8章",
+              time: "3h",
+            },
+            {
+              title: "モジュール",
+              desc: "共通機能を複数クラスに配る",
+              chapters: "9章",
+              time: "2h",
+            },
+            {
+              title: "Webアプリ入門",
+              desc: "リクエスト/レスポンスの基本",
+              chapters: "10章",
+              time: "2h",
+            },
+            {
+              title: "Rubyの発展",
+              desc: "例外処理・正規表現で実力を深める",
+              chapters: "11章",
+              time: "3h",
+            },
+          ],
+        },
+        railsBeginner: {
+          title: "Rails入門①②",
+          promptKey: "rails_beginner",
+          chapters: [
+            {
+              num: 1,
+              title: "アプリの機能を確認しよう（入門①）",
+              time: "1h",
+              status: "locked",
+            },
+            {
+              num: 2,
+              title: "Railsアプリを動かしてみよう",
+              time: "1h",
+              status: "locked",
+            },
+            {
+              num: 3,
+              title: "ユーザー画面を作ってRailsの処理フローを学ぼう",
+              time: "3h",
+              status: "locked",
+            },
+            {
+              num: 4,
+              title: "デバッグをできるようになろう",
+              time: "3h",
+              status: "locked",
+            },
+            {
+              num: 5,
+              title: "コントローラとビューについて知ろう",
+              time: "4h",
+              status: "locked",
+            },
+            {
+              num: 6,
+              title: "アプリの機能を確認しよう（入門②）",
+              time: "1h",
+              status: "locked",
+            },
+            {
+              num: 7,
+              title: "モデルについて知ろう",
+              time: "4h",
+              status: "locked",
+            },
+            {
+              num: 8,
+              title: "マイグレーションについて知ろう",
+              time: "5h",
+              status: "locked",
+            },
+            {
+              num: 9,
+              title: "バリデーションとアソシエーション",
+              time: "5h",
+              status: "locked",
+            },
+            {
+              num: 10,
+              title: "ログイン機能を作ろう",
+              time: "5h",
+              status: "locked",
+            },
+            {
+              num: 11,
+              title: "ゼロからタスク管理ページを実装しよう",
+              time: "16h",
+              status: "locked",
+            },
+          ],
+          description: "MVC・CRUD・認証の基本フローを掲示板アプリで体験",
+          cards: [
+            {
+              title: "アプリ機能の確認①",
+              desc: "Rails入門①の全体像を把握する",
+              chapters: "1章",
+              time: "1h",
+            },
+            {
+              title: "Railsを動かす",
+              desc: "rails server、初めての画面表示",
+              chapters: "2章",
+              time: "1h",
+            },
+            {
+              title: "処理フロー",
+              desc: "ルーティング→コントローラ→ビュー",
+              chapters: "3章",
+              time: "3h",
+            },
+            {
+              title: "デバッグ",
+              desc: "better_errors、Rails consoleの使い方",
+              chapters: "4章",
+              time: "3h",
+            },
+            {
+              title: "コントローラとビュー",
+              desc: "params、Strong Parameters、パーシャル",
+              chapters: "5章",
+              time: "4h",
+            },
+            {
+              title: "アプリ機能の確認②",
+              desc: "Rails入門②の全体像を把握する",
+              chapters: "6章",
+              time: "1h",
+            },
+            {
+              title: "モデル",
+              desc: "ActiveRecord、CRUDの基本操作",
+              chapters: "7章",
+              time: "4h",
+            },
+            {
+              title: "マイグレーション",
+              desc: "テーブル変更、カラム追加・削除",
+              chapters: "8章",
+              time: "5h",
+            },
+            {
+              title: "バリデーションとアソシエーション",
+              desc: "データの検証と関連付け",
+              chapters: "9章",
+              time: "5h",
+            },
+            {
+              title: "ログイン機能",
+              desc: "セッション、認証の基本を実装",
+              chapters: "10章",
+              time: "5h",
+            },
+            {
+              title: "ゼロから実装",
+              desc: "タスク管理を全知識で自力構築",
+              chapters: "11章",
+              time: "16h",
+            },
+          ],
+        },
+        railsBasic: {
+          title: "Rails基礎①②",
+          promptKey: "rails_basic",
+          chapters: [
+            {
+              num: 1,
+              title: "アプリの機能を確認（基礎①）",
+              time: "1h",
+              status: "done",
+            },
+            {
+              num: 2,
+              title: "アプリの基本設定を行う",
+              time: "2h",
+              status: "done",
+            },
+            {
+              num: 3,
+              title: "ヘッダー/フッターを設置",
+              time: "6h",
+              status: "current",
+            },
+            {
+              num: 4,
+              title: "ユーザー機能を作成しよう",
+              time: "16h",
+              status: "locked",
+            },
+            {
+              num: 5,
+              title: "i18nによる日本語化対応",
+              time: "4h",
+              status: "locked",
+            },
+            {
+              num: 6,
+              title: "フラッシュメッセージの設定",
+              time: "6h",
+              status: "locked",
+            },
+            {
+              num: 7,
+              title: "デコレーターの導入",
+              time: "4h",
+              status: "locked",
+            },
+            { num: 8, title: "掲示板の一覧機能", time: "8h", status: "locked" },
+            { num: 9, title: "掲示板作成機能", time: "8h", status: "locked" },
+            {
+              num: 10,
+              title: "エラー情報を個別表示",
+              time: "4h",
+              status: "locked",
+            },
+            {
+              num: 11,
+              title: "画像アップロード機能",
+              time: "12h",
+              status: "locked",
+            },
+            {
+              num: 12,
+              title: "詳細画面/コメント機能",
+              time: "16h",
+              status: "locked",
+            },
+            {
+              num: 13,
+              title: "タイトルを動的に出力",
+              time: "4h",
+              status: "locked",
+            },
+            { num: 14, title: "編集、削除機能", time: "11h", status: "locked" },
+            {
+              num: 15,
+              title: "アプリの機能を確認（基礎②）",
+              time: "1h",
+              status: "locked",
+            },
+            {
+              num: 16,
+              title: "ブックマーク機能",
+              time: "12h",
+              status: "locked",
+            },
+            {
+              num: 17,
+              title: "ブックマークのajax化",
+              time: "8h",
+              status: "locked",
+            },
+            {
+              num: 18,
+              title: "コメントのajax化",
+              time: "12h",
+              status: "locked",
+            },
+            {
+              num: 19,
+              title: "ページネーション",
+              time: "8h",
+              status: "locked",
+            },
+            { num: 20, title: "検索機能", time: "8h", status: "locked" },
+            {
+              num: 21,
+              title: "プロフィール編集",
+              time: "4h",
+              status: "locked",
+            },
+            {
+              num: 22,
+              title: "パスワードリセット",
+              time: "16h",
+              status: "locked",
+            },
+            {
+              num: 23,
+              title: "[管理画面] ログイン/トップ",
+              time: "12h",
+              status: "locked",
+            },
+            { num: 24, title: "[管理画面] CRUD", time: "8h", status: "locked" },
+          ],
+          description: "掲示板アプリをゼロから構築し、高度な機能を追加",
+          cards: [
+            {
+              title: "アプリ機能の確認（基礎①）",
+              desc: "見本アプリを操作し全機能を把握",
+              chapters: "1章",
+              time: "1h",
+            },
+            {
+              title: "基本設定",
+              desc: "Docker環境構築・generator設定・Gemfile管理",
+              chapters: "2章",
+              time: "2h",
+            },
+            {
+              title: "ヘッダー/フッター",
+              desc: "application.html.erb・パーシャル・レイアウト",
+              chapters: "3章",
+              time: "6h",
+            },
+            {
+              title: "ユーザー登録",
+              desc: "Sorcery認証・パスワードハッシュ化",
+              chapters: "4章",
+              time: "16h",
+            },
+            {
+              title: "i18n日本語化",
+              desc: "エラーメッセージ・モデル名を日本語化",
+              chapters: "5章",
+              time: "4h",
+            },
+            {
+              title: "フラッシュメッセージ",
+              desc: "success/danger通知の表示と共通化",
+              chapters: "6章",
+              time: "6h",
+            },
+            {
+              title: "デコレーター",
+              desc: "Draperでビューロジックをモデルから分離",
+              chapters: "7章",
+              time: "4h",
+            },
+            {
+              title: "掲示板の一覧表示",
+              desc: "indexアクション・N+1問題・includes",
+              chapters: "8章",
+              time: "8h",
+            },
+            {
+              title: "掲示板作成機能",
+              desc: "new/createアクション・バリデーション",
+              chapters: "9章",
+              time: "8h",
+            },
+            {
+              title: "エラー個別表示",
+              desc: "バリデーションエラーをフィールドごとに表示",
+              chapters: "10章",
+              time: "4h",
+            },
+            {
+              title: "画像アップロード",
+              desc: "CarrierWave/ActiveStorageで画像機能",
+              chapters: "11章",
+              time: "12h",
+            },
+            {
+              title: "詳細画面/コメント",
+              desc: "ネストしたリソース・コメントCRUD",
+              chapters: "12章",
+              time: "16h",
+            },
+            {
+              title: "タイトル動的出力",
+              desc: "content_for/yieldでページタイトル設定",
+              chapters: "13章",
+              time: "4h",
+            },
+            {
+              title: "編集・削除機能",
+              desc: "edit/update/destroy・認可チェック",
+              chapters: "14章",
+              time: "11h",
+            },
+            {
+              title: "アプリ機能の確認（基礎②）",
+              desc: "基礎②で追加する高度な機能を把握",
+              chapters: "15章",
+              time: "1h",
+            },
+            {
+              title: "ブックマーク機能",
+              desc: "多対多リレーション・中間テーブル",
+              chapters: "16章",
+              time: "12h",
+            },
+            {
+              title: "ブックマークajax化",
+              desc: "非同期通信でページ遷移なし更新",
+              chapters: "17章",
+              time: "8h",
+            },
+            {
+              title: "コメントajax化",
+              desc: "コメント投稿・削除の非同期処理",
+              chapters: "18章",
+              time: "12h",
+            },
+            {
+              title: "ページネーション",
+              desc: "kaminari/pagyで大量データを分割表示",
+              chapters: "19章",
+              time: "8h",
+            },
+            {
+              title: "検索機能",
+              desc: "ransackで部分一致・複数条件検索",
+              chapters: "20章",
+              time: "8h",
+            },
+            {
+              title: "プロフィール編集",
+              desc: "ユーザー自身のプロフィール更新機能",
+              chapters: "21章",
+              time: "4h",
+            },
+            {
+              title: "パスワードリセット",
+              desc: "トークンベースの安全なリセットフロー",
+              chapters: "22章",
+              time: "16h",
+            },
+            {
+              title: "[管理画面] ログイン/トップ",
+              desc: "namespace分離・管理者認証",
+              chapters: "23章",
+              time: "12h",
+            },
+            {
+              title: "[管理画面] CRUD",
+              desc: "管理画面からの全データ操作",
+              chapters: "24章",
+              time: "8h",
+            },
+          ],
+        },
+        rubyBasic: {
+          title: "Rubyで学ぶアルゴリズム",
+          promptKey: "ruby_basic",
+          chapters: [
+            { num: 1, title: "線形探索", time: "5h", status: "locked" },
+            { num: 2, title: "二分探索", time: "5h", status: "locked" },
+            { num: 3, title: "動的計画法", time: "5h", status: "locked" },
+          ],
+          description: "探索・最適化アルゴリズムをRubyで実装",
+          cards: [
+            {
+              title: "線形探索",
+              desc: "配列を先頭から順に探す。O(n)の計算量を体感する",
+              chapters: "1章",
+              time: "5h",
+            },
+            {
+              title: "二分探索",
+              desc: "ソート済み配列を半分ずつ絞る。O(log n)の威力を知る",
+              chapters: "2章",
+              time: "5h",
+            },
+            {
+              title: "動的計画法",
+              desc: "部分問題の結果を再利用する。メモ化で爆速化",
+              chapters: "3章",
+              time: "5h",
+            },
+          ],
+        },
+      };
+
+      // ===== 秘密の鍵（SHA-256ハッシュ） =====
+      const CARD_KEY_HASHES = {
+        // rubyBeginner (11 cards)
+        rubyBeginner_0:
+          "775ae503348420f1251c03adc0d04ee49caeb043a8a2444d915c6a2e6736b9b6",
+        rubyBeginner_1:
+          "9d664c5df81b1ab973e679e7005ed50868666342a919ebc26fd420b1c7a893c6",
+        rubyBeginner_2:
+          "5dcf99a71147352802e5d1e8e51b7e5965f0cf2c111dc06fd89e61acf3bd26cd",
+        rubyBeginner_3:
+          "b9d908a691eec7f46ee141d6c79d178732edd6b38ba8e9377d867d3e1fa9ab37",
+        rubyBeginner_4:
+          "d1fb0161f47ba9be49fe0430f7c276625b7285fe4b981a12663af944b416d306",
+        rubyBeginner_5:
+          "984f7b7dc2d3a9cb401f53423ba7b6fa0818ab8e483ad16ad16f7be457588662",
+        rubyBeginner_6:
+          "8d8be9739e2f799b80003036b5372b83711d38aec600be2a8a7218839c2fe32f",
+        rubyBeginner_7:
+          "b344887f95d24ff1e9efdeca19dda4d9f84145aecc01a17ba23698bdbd6b7dc8",
+        rubyBeginner_8:
+          "a103fc64c9a9706273d5e2719e708108430738d4fa9b4a5dc5dd01a744beba0d",
+        rubyBeginner_9:
+          "15a815b73b90c9d03e962be6f26f7176aa64fb2e7c73d3111d83501f14d4abdf",
+        rubyBeginner_10:
+          "892afcd6f5d6b08e14656e0740a4408f113acc11aaad60744fc45d51d5439173",
+        // railsBeginner (11 cards)
+        railsBeginner_0:
+          "7f27cf6bb25440582d2c08b7a858f3fa9ebfe0100c66cfa5be78c6f88aa6f0b8",
+        railsBeginner_1:
+          "b14ce27968ec220af3a346eaf455cdea44ea0b63987326624a05c3e6740c11c7",
+        railsBeginner_2:
+          "09a14973538af01ea03b5182ab4350bb1c6708ba47ba860ccab5888d52d41b60",
+        railsBeginner_3:
+          "ef828605e0bf63cd010a46c22c62f533db6f01f7a98612d36563b68f57490833",
+        railsBeginner_4:
+          "a01511571f324edb7e75da3490f818b6cca207c1391ecb2b9d843111ae59006b",
+        railsBeginner_5:
+          "244a6d0719067f2e77e18159bf37abb6a54596c465af8d6c0fcbc3835c915e0a",
+        railsBeginner_6:
+          "e9d048f9e057c899a0e4624f231a9e90d256f6103059813d75a9464179f7b217",
+        railsBeginner_7:
+          "e303684ec469b64f406a8b720010ba3d32cd30ddb35ee56543e123a6061597c5",
+        railsBeginner_8:
+          "7c666d373b5c2bff3c0527f9c6384eb806ca193ec2a4e58fae4e82a3eab101a7",
+        railsBeginner_9:
+          "903d6b18ee7ee7c541893cd0055c8d493cdf3cf2079263dfecd6deeb17158f8e",
+        railsBeginner_10:
+          "90d5ffca17d44b6032696a2076188bed4e4a270489942fa29873a07c3f3753a4",
+        // railsBasic (24 cards)
+        railsBasic_0:
+          "a49edc97d07a7e7ce01adde86419cb784589916dda2d23b38e35fcaebb6efff8",
+        railsBasic_1:
+          "58bb402b3608adacf46beff655e2738c84bde52f71dfc642291cd5ea7653587a",
+        railsBasic_2:
+          "1f52b515fce957fbcc731648af1f10ead819bba9d6e5f44012c5bd23817badca",
+        railsBasic_3:
+          "ed39c382659f211ad2dde0028d579a9bf74c20cf559fb2459016e9024bce51f5",
+        railsBasic_4:
+          "43650ce66d0a6966d2b2b3ddaa3d2e1113e59caf233feb80ed12f6745506ec49",
+        railsBasic_5:
+          "a52f47381bcc3471af06202a0996316542ce64dce490b7e44a522c8897773eb4",
+        railsBasic_6:
+          "1ce3b50eece3442361f2cfa27c91a3bf35c52f406cbf539785fbe7019f87e956",
+        railsBasic_7:
+          "200a01d842cdaf06de3ea08f9881b8f4799d918c003fdf497cfc422827de225f",
+        railsBasic_8:
+          "f2b18af8051ec2199ed1737a764a3a9e60d8f497224481dce9fbb6d4f500b8aa",
+        railsBasic_9:
+          "5e2e3f79f0cc01292fd8d5dddbbf2dbd73c9a4cdccacec29d2c595dd37971f98",
+        railsBasic_10:
+          "b2eb12509919f6a606e34ab609d044121c5becc738869a277cad930618fa3dd9",
+        railsBasic_11:
+          "826c5b5c96e2eb549dbd7e67f72f0d40cba1b729e11ad906a78231f92dd9ce7a",
+        railsBasic_12:
+          "379fca7b1656c30cf8cd4c9f404f33b94e25ba603e02a1f053383977a0568d21",
+        railsBasic_13:
+          "512ac60f0788b249a44d5cb3ca98ad1e791c471b1a695688b9d35956475bc8b9",
+        railsBasic_14:
+          "720d20ae8089b81d0d9125e4b6cf33fb8a9dd142698f443dc9c7ac1c2ee28b40",
+        railsBasic_15:
+          "bb401e7b146fc037c63cd020a9b912d240e7daf930f5fa71ba2b87d069d2d8c5",
+        railsBasic_16:
+          "47031b6928f97804f9de957a3bda215812e21dadc3fa26f12054afbab3d84e62",
+        railsBasic_17:
+          "fa0a8f373f83c0b76939de325a90a2dcb60121d3f0283a62780e4e17f388e7be",
+        railsBasic_18:
+          "f957e656a7fb972834043917f177022e5f8e4ffe085bf08012aae85126dfffce",
+        railsBasic_19:
+          "a56713b3587dc9d764a458a10929566e331aec49aba48dfef637b1a145b06a8e",
+        railsBasic_20:
+          "82a6a0d426c39ef6582e8612fabd24cd1e97abbac86f486fe7323a3a48025acf",
+        railsBasic_21:
+          "2a562a8cc63beb5b59d338d32dcd997e2a528c4a4cc57956ea92a3055987510d",
+        railsBasic_22:
+          "5fa4705ccc56a4dc1c8d7e3404ef7400b1eff39dcb10782d77fb2df1dab5aec1",
+        railsBasic_23:
+          "8baec49d36be0eb49bcea1f8442006edfa02fd203d8807eedcaf9e19a344365c",
+        // rubyBasic (3 cards, unchanged)
+        rubyBasic_0:
+          "f957e656a7fb972834043917f177022e5f8e4ffe085bf08012aae85126dfffce",
+        rubyBasic_1:
+          "65ffe2ae3ba19b9bc9c57f40e16d8f06163c1bc91152e2fa0bb96114586dc881",
+        rubyBasic_2:
+          "4ec4e5e4b43316e74dcba3689bee70e66940636289d351d32f70c8c43ad85f26",
+      };
+
+      async function sha256(text) {
+        const data = new TextEncoder().encode(text);
+        const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+        return Array.from(new Uint8Array(hashBuffer))
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+      }
+
+      const CARD_KEYS = {
+        rubyBeginner_0: "最初の一歩",
+        rubyBeginner_1: "変数の魔法",
+        rubyBeginner_2: "分岐の剣",
+        rubyBeginner_3: "整列の盾",
+        rubyBeginner_4: "選別の目",
+        rubyBeginner_5: "名札の術",
+        rubyBeginner_6: "技の巻物",
+        rubyBeginner_7: "設計の鍛冶",
+        rubyBeginner_8: "共有の紋章",
+        rubyBeginner_9: "通信の翼",
+        rubyBeginner_10: "旅立ちの証",
+        railsBeginner_0: "レールの始発",
+        railsBeginner_1: "起動の合図",
+        railsBeginner_2: "流れの地図",
+        railsBeginner_3: "虫取りの灯",
+        railsBeginner_4: "制御の手綱",
+        railsBeginner_5: "新章の扉",
+        railsBeginner_6: "記憶の水晶",
+        railsBeginner_7: "変遷の石板",
+        railsBeginner_8: "守護の盾",
+        railsBeginner_9: "門番の鍵",
+        railsBeginner_10: "創造の炎",
+        railsBasic_0: "設計の巨獣",
+        railsBasic_1: "礎の石",
+        railsBasic_2: "枠組の術",
+        railsBasic_3: "登録の儀",
+        railsBasic_4: "認証の印",
+        railsBasic_5: "一覧の巻物",
+        railsBasic_6: "創作の筆",
+        railsBasic_7: "誤りの灯",
+        railsBasic_8: "作品の門",
+        railsBasic_9: "画の魔法",
+        railsBasic_10: "語りの間",
+        railsBasic_11: "題名の札",
+        railsBasic_12: "修正の鉋",
+        railsBasic_13: "新篇の扉",
+        railsBasic_14: "印の栞",
+        railsBasic_15: "閃光の矢",
+        railsBasic_16: "言葉の翻訳",
+        railsBasic_17: "分割の術",
+        railsBasic_18: "探索の眼",
+        railsBasic_19: "権限の錠",
+        railsBasic_20: "選択の杖",
+        railsBasic_21: "通知の鈴",
+        railsBasic_22: "城門の鍵",
+        railsBasic_23: "城閣の鎧",
+        rubyBasic_0: "探索の眼",
+        rubyBasic_1: "半分の知恵",
+        rubyBasic_2: "記憶の石板",
+      };
+
+      function safeJsonParse(str) {
+        try {
+          return str ? JSON.parse(str) : null;
+        } catch (e) {
+          console.warn("データ読み込みエラー:", e);
+          return null;
+        }
+      }
+
+      function getSectionKey(section) {
+        return Object.keys(CURRICULUM).find((k) => CURRICULUM[k] === section);
+      }
+
+      // ===== Level System =====
+      const LEVEL_TABLE = [
+        { lv: 1, exp: 0, title: "見習い冒険者" },
+        { lv: 2, exp: 100, title: "駆け出し冒険者" },
+        { lv: 3, exp: 300, title: "一人前の冒険者" },
+        { lv: 4, exp: 500, title: "腕利き冒険者" },
+        { lv: 5, exp: 800, title: "熟練冒険者" },
+        { lv: 7, exp: 1300, title: "歴戦の冒険者" },
+        { lv: 10, exp: 2000, title: "ベテラン冒険者" },
+        { lv: 13, exp: 3500, title: "達人冒険者" },
+        { lv: 15, exp: 5000, title: "伝説の冒険者" },
+        { lv: 20, exp: 10000, title: "ギルドマスター" },
+      ];
+
+      function getLevelInfo(exp) {
+        let current = LEVEL_TABLE[0];
+        let next = LEVEL_TABLE[1];
+        for (let i = LEVEL_TABLE.length - 1; i >= 0; i--) {
+          if (exp >= LEVEL_TABLE[i].exp) {
+            current = LEVEL_TABLE[i];
+            next = LEVEL_TABLE[i + 1] || null;
+            break;
+          }
+        }
+        return {
+          level: current.lv,
+          title: current.title,
+          currentExp: exp,
+          nextExp: next ? next.exp : null,
+          baseExp: current.exp,
+        };
+      }
+
+      function addExp(amount, reason) {
+        state.exp = (state.exp || 0) + amount;
+        logActivity(reason);
+        saveState();
+        updateStatusBar();
+        const info = getLevelInfo(state.exp);
+        const prevInfo = getLevelInfo(state.exp - amount);
+        if (info.level > prevInfo.level) {
+          showLevelUp(info);
+        }
+      }
+
+      function logActivity(type) {
+        const today = new Date().toISOString().slice(0, 10);
+        if (!state.activityLog) state.activityLog = {};
+        if (!state.activityLog[today]) state.activityLog[today] = [];
+        state.activityLog[today].push({ type, time: Date.now() });
+      }
+
+      function showLevelUp(info) {
+        const overlay = document.createElement("div");
+        overlay.className = "levelup-overlay";
+        overlay.style.cssText =
+          "position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;";
+        overlay.innerHTML = `<div style="background:#1a1a2e;border:3px solid #f59e0b;border-radius:16px;padding:40px 48px;text-align:center;color:white;animation:unlockPulse 0.6s ease;">
+                      <div style="font-size:48px;margin-bottom:12px;">🎉</div>
+                      <div style="font-size:24px;font-weight:700;color:#f59e0b;margin-bottom:8px;">LEVEL UP!</div>
+                      <div style="font-size:18px;margin-bottom:16px;">Lv.${info.level}「${info.title}」</div>
+                      <div style="font-size:14px;color:#9ca3af;margin-bottom:20px;">⚡ ${escapeHtml(state.masterName || "RAN")}「...認めてやる。お前は成長した。」</div>
+                      <button onclick="this.closest('.levelup-overlay').remove()" style="padding:10px 32px;background:#f59e0b;color:#1a1a2e;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">続ける</button>
+                    </div>`;
+        overlay.addEventListener("click", (e) => {
+          if (e.target === overlay) overlay.remove();
+        });
+        document.body.appendChild(overlay);
+      }
+
+      // ===== State =====
+      let state = {
+        userName: "",
+        masterName: "",
+        records: {},
+        unlockedCards: [],
+        prepChecks: [false, false, false],
+        exp: 0,
+        activityLog: {},
+      };
+
+      // ===== Helpers =====
+      function parseChapterRange(chaptersStr) {
+        const m = chaptersStr.match(/(\d+)(?:-(\d+))?/);
+        if (!m) return [];
+        const start = parseInt(m[1]);
+        const end = m[2] ? parseInt(m[2]) : start;
+        const nums = [];
+        for (let i = start; i <= end; i++) nums.push(i);
+        return nums;
+      }
+
+      function getCardStatus(section, cardIdx) {
+        const nums = parseChapterRange(section.cards[cardIdx].chapters);
+        const matched = section.chapters.filter((ch) => nums.includes(ch.num));
+        if (matched.length === 0) return "locked";
+        if (matched.every((ch) => ch.status === "done")) return "done";
+        if (matched.some((ch) => ch.status === "current")) return "current";
+        if (matched.some((ch) => ch.status === "done")) return "current";
+        return "locked";
+      }
+
+      function calculateSectionProgress(section) {
+        const done = section.chapters.filter(
+          (ch) => ch.status === "done",
+        ).length;
+        return Math.round((done / section.chapters.length) * 100);
+      }
+
+      // ===== 鍵システム =====
+      function isCardUnlocked(sectionKey, cardIdx) {
+        if (cardIdx === 0) return true;
+        const section = CURRICULUM[sectionKey];
+        const status = getCardStatus(section, cardIdx);
+        if (status === "done" || status === "current") return true;
+        return state.unlockedCards.includes(sectionKey + "_" + cardIdx);
+      }
+
+      async function validateKey(sectionKey, cardIdx, input) {
+        const hash = CARD_KEY_HASHES[sectionKey + "_" + cardIdx];
+        if (!hash) return false;
+        const inputHash = await sha256(input.trim());
+        return inputHash === hash;
+      }
+
+      function unlockNextCard(sectionKey, cardIdx) {
+        const section = CURRICULUM[sectionKey];
+        const nextIdx = cardIdx + 1;
+        if (nextIdx >= section.cards.length) return false;
+        const unlockId = sectionKey + "_" + nextIdx;
+        if (!state.unlockedCards.includes(unlockId)) {
+          state.unlockedCards.push(unlockId);
+          saveState();
+          return true;
+        }
+        return false;
+      }
+
+      // ===== Init =====
+      function init() {
+        const lastUser = localStorage.getItem("rq_last_user");
+        if (lastUser) {
+          const stateKey = "rq_state_" + lastUser;
+          const savedState = localStorage.getItem(stateKey);
+          const parsed = safeJsonParse(savedState);
+          if (parsed) {
+            state = parsed;
+            if (!state.unlockedCards) state.unlockedCards = [];
+            if (!state.prepChecks) state.prepChecks = [false, false, false];
+            if (!state.exp) state.exp = 0;
+            if (!state.activityLog) state.activityLog = {};
+            if (state.userName) {
+              showDashboard();
+              return;
+            }
+          }
+        }
+        const oldSaved = localStorage.getItem("railsquest_state");
+        const oldParsed = safeJsonParse(oldSaved);
+        if (oldParsed) {
+          state = oldParsed;
+          if (!state.unlockedCards) state.unlockedCards = [];
+          if (!state.prepChecks) state.prepChecks = [false, false, false];
+          if (!state.exp) state.exp = 0;
+          if (!state.activityLog) state.activityLog = {};
+          if (state.userName) {
+            showDashboard();
+          }
+        }
+      }
+
+      // ===== Auth =====
+      function switchAuthTab(tab, btn) {
+        document.getElementById("authRegister").style.display =
+          tab === "register" ? "" : "none";
+        document.getElementById("authLogin").style.display =
+          tab === "login" ? "" : "none";
+        document.querySelectorAll("#authTabs .tab-btn").forEach((b) => {
+          b.classList.remove("active");
+          b.style.borderBottomColor = "transparent";
+        });
+        btn.classList.add("active");
+        btn.style.borderBottomColor = "var(--primary)";
+      }
+
+      function registerUser() {
+        const name = document.getElementById("regName").value.trim();
+        const master = document.getElementById("regMaster").value.trim();
+        const err = document.getElementById("regError");
+        if (!name) {
+          err.textContent = "冒険者名を入力してください";
+          return;
+        }
+        if (!master) {
+          err.textContent = "師匠の名前を入力してください";
+          return;
+        }
+        const stateKey = "rq_state_" + name;
+        const existing = safeJsonParse(localStorage.getItem(stateKey));
+        if (existing) {
+          state = existing;
+          if (!state.unlockedCards) state.unlockedCards = [];
+          if (!state.prepChecks) state.prepChecks = [false, false, false];
+          if (!state.exp) state.exp = 0;
+          if (!state.activityLog) state.activityLog = {};
+        }
+        state.userName = name;
+        state.masterName = master;
+        if (!state.registeredAt) state.registeredAt = new Date().toISOString();
+        localStorage.setItem("rq_user_" + name, JSON.stringify({ stateKey }));
+        localStorage.setItem(stateKey, JSON.stringify(state));
+        localStorage.setItem("rq_last_user", name);
+        showDashboard();
+      }
+
+      function loginUser() {
+        const name = document.getElementById("loginName").value.trim();
+        const err = document.getElementById("loginError");
+        if (!name) {
+          err.textContent = "冒険者名を入力してください";
+          return;
+        }
+        const stateKey = "rq_state_" + name;
+        const savedState = safeJsonParse(localStorage.getItem(stateKey));
+        if (!savedState) {
+          err.textContent =
+            "その冒険者名は登録されていません。先に「新規登録」してください。";
+          return;
+        }
+        state = savedState;
+        if (!state.unlockedCards) state.unlockedCards = [];
+        if (!state.prepChecks) state.prepChecks = [false, false, false];
+        if (!state.exp) state.exp = 0;
+        if (!state.activityLog) state.activityLog = {};
+        state.userName = name;
+        localStorage.setItem("rq_user_" + name, JSON.stringify({ stateKey }));
+        localStorage.setItem("rq_last_user", name);
+        showDashboard();
+      }
+
+      function saveState() {
+        const userKey = "rq_state_" + state.userName;
+        localStorage.setItem(userKey, JSON.stringify(state));
+      }
+
+      // ===== Profile =====
+      function openProfile() {
+        document.getElementById("editName").value = state.userName;
+        document.getElementById("editMaster").value = state.masterName;
+        document.getElementById("profileOverlay").classList.add("active");
+      }
+      function closeProfile(e) {
+        if (e && e.target !== e.currentTarget) return;
+        document.getElementById("profileOverlay").classList.remove("active");
+      }
+      function saveProfile() {
+        const oldName = state.userName;
+        const newName = document.getElementById("editName").value.trim();
+        const newMaster = document.getElementById("editMaster").value.trim();
+        if (!newName || !newMaster) return;
+        if (newName !== oldName) {
+          const oldUserData = safeJsonParse(
+            localStorage.getItem("rq_user_" + oldName),
+          );
+          if (oldUserData) {
+            const parsed = oldUserData;
+            localStorage.removeItem("rq_user_" + oldName);
+            localStorage.removeItem(parsed.stateKey);
+            parsed.stateKey = "rq_state_" + newName;
+            localStorage.setItem("rq_user_" + newName, JSON.stringify(parsed));
+            localStorage.setItem("rq_last_user", newName);
+          }
+        }
+        state.userName = newName;
+        state.masterName = newMaster;
+        saveState();
+        document.getElementById("headerBadge").textContent =
+          state.userName + " の冒険";
+        updateStatusBar();
+        closeProfile();
+      }
+      function confirmReset() {
+        if (
+          !confirm(
+            "本当にリセットしますか？\n全ての学習記録、経験値、鍵の解放状況が消去されます。\nこの操作は取り消せません。",
+          )
+        )
+          return;
+        const userName = state.userName;
+        localStorage.removeItem("rq_user_" + userName);
+        localStorage.removeItem("rq_state_" + userName);
+        localStorage.removeItem("rq_last_user");
+        localStorage.removeItem("railsquest_state");
+        location.reload();
+      }
+
+      function showDashboard() {
+        document.getElementById("setupPanel").style.display = "none";
+        document.getElementById("mainDashboard").style.display = "block";
+        document.getElementById("headerBadge").style.display = "inline";
+        document.getElementById("headerBadge").textContent =
+          state.userName + " の冒険";
+        document.getElementById("profileBtn").style.display = "";
+        renderCards();
+        for (const key of Object.keys(CURRICULUM)) {
+          const bar = document.getElementById("progress-" + key);
+          if (bar)
+            bar.style.width = calculateSectionProgress(CURRICULUM[key]) + "%";
+        }
+        renderPrepChecks();
+        updateStatusBar();
+        renderCalendar();
+      }
+
+      // ===== Status Bar =====
+      function updateStatusBar() {
+        const info = getLevelInfo(state.exp || 0);
+        document.getElementById("statusBar").classList.add("visible");
+        document.getElementById("statusLv").textContent = "Lv." + info.level;
+        document.getElementById("statusTitle").textContent = info.title;
+        if (info.nextExp) {
+          const pct = Math.round(
+            ((info.currentExp - info.baseExp) / (info.nextExp - info.baseExp)) *
+              100,
+          );
+          document.getElementById("statusExpFill").style.width = pct + "%";
+          document.getElementById("statusExpText").textContent =
+            info.currentExp + " / " + info.nextExp + " EXP";
+        } else {
+          document.getElementById("statusExpFill").style.width = "100%";
+          document.getElementById("statusExpText").textContent =
+            info.currentExp + " EXP (MAX)";
+        }
+        const streak = getStreak();
+        document.getElementById("statusStreak").textContent =
+          streak > 0 ? "\uD83D\uDD25 " + streak + "日連続" : "";
+      }
+
+      function showExpToast(amount, reason) {
+        const toast = document.createElement("div");
+        toast.className = "exp-toast";
+        toast.textContent = "+ " + amount + " EXP（" + reason + "）";
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2200);
+      }
+
+      // ===== Calendar =====
+      let calViewDate = new Date();
+
+      function changeCalMonth(delta) {
+        calViewDate.setMonth(calViewDate.getMonth() + delta);
+        renderCalendar();
+      }
+
+      function renderCalendar() {
+        const grid = document.getElementById("calendarGrid");
+        grid.innerHTML = "";
+        const year = calViewDate.getFullYear();
+        const month = calViewDate.getMonth();
+        const today = new Date();
+        const todayKey = today.toISOString().slice(0, 10);
+        document.getElementById("calMonthLabel").textContent =
+          year + "年 " + (month + 1) + "月";
+        const firstDay = new Date(year, month, 1);
+        const startDow = firstDay.getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        let monthActive = 0;
+        for (let i = 0; i < startDow; i++) {
+          const empty = document.createElement("div");
+          empty.style.background = "transparent";
+          grid.appendChild(empty);
+        }
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateObj = new Date(year, month, d);
+          const key = dateObj.toISOString().slice(0, 10);
+          const count =
+            state.activityLog && state.activityLog[key]
+              ? state.activityLog[key].length
+              : 0;
+          const cell = document.createElement("div");
+          cell.className = "calendar-cell";
+          cell.textContent = d;
+          if (count >= 5) cell.classList.add("lv4");
+          else if (count >= 3) cell.classList.add("lv3");
+          else if (count >= 2) cell.classList.add("lv2");
+          else if (count >= 1) cell.classList.add("lv1");
+          if (key === todayKey) cell.classList.add("today");
+          if (count > 0) {
+            cell.title = count + "回の活動";
+            monthActive++;
+          }
+          grid.appendChild(cell);
+        }
+        document.getElementById("calendarTotal").textContent =
+          "今月 " + monthActive + " 日学習";
+        const streak = getStreak();
+        document.getElementById("calendarStreak").innerHTML =
+          "&#128293; " + streak + "日連続";
+      }
+
+      function getStreak() {
+        if (!state.activityLog) return 0;
+        let streak = 0;
+        const today = new Date();
+        for (let i = 0; i < 365; i++) {
+          const d = new Date(today);
+          d.setDate(d.getDate() - i);
+          const key = d.toISOString().slice(0, 10);
+          if (state.activityLog[key] && state.activityLog[key].length > 0) {
+            streak++;
+          } else {
+            break;
+          }
+        }
+        return streak;
+      }
+
+      // ===== Prep Checklist =====
+      function renderPrepChecks() {
+        const allDone = state.prepChecks.every(Boolean);
+        state.prepChecks.forEach((checked, i) => {
+          const item = document.querySelectorAll(".prep-item")[i];
+          const box = document.getElementById("prepCheck" + i);
+          if (checked) {
+            item.classList.add("checked");
+            box.innerHTML = "&#10003;";
+          } else {
+            item.classList.remove("checked");
+            box.innerHTML = "";
+          }
+        });
+        const msg = document.getElementById("prepDoneMsg");
+        const toggle = document.getElementById("prepToggle");
+        const panel = document.getElementById("prepPanel");
+        if (allDone) {
+          msg.classList.add("visible");
+          toggle.classList.add("visible");
+          panel.classList.add("completed");
+        } else {
+          msg.classList.remove("visible");
+          toggle.classList.remove("visible");
+          panel.classList.remove("completed");
+        }
+      }
+
+      function togglePrep(idx) {
+        state.prepChecks[idx] = !state.prepChecks[idx];
+        saveState();
+        renderPrepChecks();
+      }
+
+      function togglePrepPanel() {
+        const panel = document.getElementById("prepPanel");
+        const items = panel.querySelectorAll(".prep-item");
+        const msg = document.getElementById("prepDoneMsg");
+        const toggle = document.getElementById("prepToggle");
+        const isCollapsed = panel.dataset.collapsed === "true";
+        if (isCollapsed) {
+          items.forEach((el) => (el.style.display = ""));
+          msg.style.display = "";
+          panel.querySelector(".prep-subtitle").style.display = "";
+          toggle.innerHTML = "&#9650; 準備チェックを閉じる";
+          panel.dataset.collapsed = "false";
+        } else {
+          items.forEach((el) => (el.style.display = "none"));
+          msg.style.display = "none";
+          panel.querySelector(".prep-subtitle").style.display = "none";
+          toggle.innerHTML = "&#9660; 準備チェックを開く";
+          panel.dataset.collapsed = "true";
+        }
+      }
+
+      // ===== Render Cards =====
+      function renderCards() {
+        renderSection("rubyBeginnerCards", CURRICULUM.rubyBeginner);
+        renderSection("railsBeginnerCards", CURRICULUM.railsBeginner);
+        renderSection("railsBasicCards", CURRICULUM.railsBasic);
+        renderSection("rubyBasicCards", CURRICULUM.rubyBasic);
+      }
+
+      function renderSection(containerId, section) {
+        const container = document.getElementById(containerId);
+        const sectionKey = getSectionKey(section);
+        container.innerHTML = "";
+        section.cards.forEach((card, i) => {
+          const div = document.createElement("div");
+          const unlocked = isCardUnlocked(sectionKey, i);
+          div.className = "card" + (unlocked ? "" : " is-locked");
+          div.dataset.sectionKey = sectionKey;
+          div.dataset.cardIdx = i;
+          div.onclick = () => {
+            if (!isCardUnlocked(sectionKey, i)) {
+              const prev = i > 0 ? section.cards[i - 1].title : "";
+              alert(
+                "🔒 この冒険はまだ解放されていません。\n\n前のカード「" +
+                  prev +
+                  "」の鍵を手に入れてから挑みましょう。",
+              );
+              return;
+            }
+            openModal(section, i);
+          };
+          const status = getCardStatus(section, i);
+          const statusIcon =
+            status === "done"
+              ? "&#10003;"
+              : status === "current"
+                ? "&#9654;"
+                : "&#128274;";
+          div.innerHTML = `
+                  <div class="card-status ${status}">${statusIcon}</div>
+                  <div class="card-banner">${unlocked ? card.title : "&#128274; " + card.title}</div>
+                  <div class="card-body">
+                    <p>${card.desc}</p>
+                    <div class="card-meta">
+                      <span class="card-chapters">${card.chapters}</span>
+                      <span class="card-time">${card.time}</span>
+                    </div>
+                  </div>
+                `;
+          container.appendChild(div);
+        });
+      }
+
+      // ===== Modal =====
+      let currentSection = null;
+      let currentCardIdx = 0;
+
+      function openModal(section, cardIdx) {
+        currentSection = section;
+        currentCardIdx = cardIdx;
+        const card = section.cards[cardIdx];
+        document.getElementById("modalTitle").textContent =
+          section.title + " — " + card.title;
+
+        // Persona preview
+        document.getElementById("previewRan").innerHTML = `
+                  <div class="char">&#9889; ${escapeHtml(state.masterName)}（AI師匠）</div>
+                  <div class="speech">「掴むのは3つだけだ。${escapeHtml(card.title)}の本質を教える。」</div>
+                `;
+        document.getElementById("previewRobo").innerHTML = `
+                  <div class="char">&#129302; ロボらんてくん</div>
+                  <div class="speech">「${escapeHtml(state.userName)}くん、${escapeHtml(card.title)}は最初ちょっと難しく見えるけど、大丈夫！一緒にやっていこうね。」</div>
+                `;
+
+        // Chapter list (filtered to card range)
+        const list = document.getElementById("chapterList");
+        list.innerHTML = "";
+        const cardChapterNums = parseChapterRange(card.chapters);
+        const filteredChapters = section.chapters.filter((ch) =>
+          cardChapterNums.includes(ch.num),
+        );
+        filteredChapters.forEach((ch) => {
+          const li = document.createElement("li");
+          const statusIcon =
+            ch.status === "done"
+              ? "&#10003;"
+              : ch.status === "current"
+                ? "&#9654;"
+                : "&#128274;";
+          li.innerHTML = `
+                    <span class="chapter-num">${ch.num}</span>
+                    <span>${ch.title}</span>
+                    <span class="chapter-time">${statusIcon} ${ch.time}</span>
+                  `;
+          list.appendChild(li);
+        });
+
+        // Generate prompt
+        const rawPrompt = generatePrompt(section, cardIdx);
+        document.getElementById("promptOutput").textContent = rawPrompt;
+
+        // Reset key input
+        document.getElementById("keyInput").value = "";
+        document.getElementById("keyResult").textContent = "";
+        document.getElementById("keyResult").className = "key-result";
+
+        // Load saved record
+        const recordKey = section.promptKey + "_" + cardIdx;
+        document.getElementById("recordArea").value =
+          state.records[recordKey] || "";
+        renderSavedRecords(recordKey);
+
+        // Reset tabs
+        switchTab("overview", document.querySelector("#tabBar .tab-btn"));
+
+        document.getElementById("modalOverlay").classList.add("active");
+        document.getElementById("btnCopy").classList.remove("copied");
+        document.getElementById("btnCopy").innerHTML =
+          "&#128302; 呪文をコピーする";
+        document.getElementById("copyDoneMsg").style.display = "none";
+      }
+
+      function closeModal(e) {
+        if (e && e.target !== e.currentTarget) return;
+        document.getElementById("modalOverlay").classList.remove("active");
+      }
+
+      function switchTab(tabId, btn) {
+        document
+          .querySelectorAll(".tab-content")
+          .forEach((t) => t.classList.remove("active"));
+        document
+          .querySelectorAll(".tab-btn")
+          .forEach((b) => b.classList.remove("active"));
+        document.getElementById("tab-" + tabId).classList.add("active");
+        btn.classList.add("active");
+      }
+
+      // ===== Detailed Chapter Data =====
+      const CARD_PROMPT_DETAILS = {
+        rubyBeginner_0: [
+          {
+            num: 1,
+            title: "Rubyを動かす環境構築",
+            time: "2時間",
+            goal: "RUNTEQ Books Ruby入門1章を読了。Rubyプログラムの基本的な書き方・実行方法を理解する",
+            prereq: `## 超重要：最初に理解すべき「3つの場所」の違い
+
+            完全未経験者が最初にぶつかる最大の壁は「どこに何を打つか」が分からないこと。
+            まず以下の3つの場所の違いを明確に教えること：
+
+            ### 1. ターミナル（シェル / zsh）= パソコンへの命令窓口
+            - ターミナルは「パソコンそのもの」に命令する場所
+            - ここにRubyのコード（puts や if）を直接書いても動かない
+            - ターミナルでできること：フォルダ移動（cd）、ファイル一覧（ls）、Rubyプログラムの実行（ruby ファイル名.rb）
+            - 見分け方：プロンプトに \`$\` や \`%\` が表示されている
+
+            ### 2. VSCode（エディタ）= コードを書く場所
+            - テキストエディタ。ここにRubyのコードを書いて、.rb ファイルとして保存する
+            - 書いただけでは実行されない。保存してターミナルから実行する
+
+            ### 3. irb（Interactive Ruby）= Rubyのお試し実験場
+            - ターミナルで \`irb\` と打つとRubyモードに入る
+            - ここではRubyのコードを1行ずつ試せる
+            - 見分け方：プロンプトが \`irb(main):001:0>\` のように変わる
+            - 抜け方：\`exit\` と打つか Ctrl+D
+
+            ## 手順：初めてRubyを動かすまでのステップバイステップ
+
+            ### ステップ1：VSCodeでファイルを作る
+            1. VSCodeを開く
+            2. 左側のエクスプローラー（ファイル一覧）で、作業フォルダを開く
+            3. エクスプローラーの上部にある「新しいファイル」アイコン（紙に+マーク）をクリック
+            4. ファイル名を \`practice.rb\` と入力してEnter（.rb はRubyファイルの印）
+
+            ### ステップ2：コードを書いて保存する
+            1. 開いたファイルに以下を入力：
+               \`\`\`ruby
+               puts "Hello, Ruby!"
+               \`\`\`
+            2. Cmd+S（Macの場合）で保存する
+            3. ⚠️ タブのファイル名の横に白い丸●が出ていたら未保存。保存すると消える
+
+            ### ステップ3：ターミナルでファイルを実行する
+            1. VSCode上部メニュー → ターミナル → 新しいターミナル（または Ctrl+\`）
+            2. ターミナルに以下を入力してEnter：
+               \`\`\`
+               ruby practice.rb
+               \`\`\`
+            3. \`Hello, Ruby!\` と表示されれば成功！
+
+            ### ステップ4：エラーが出た場合の対処
+            - \`No such file or directory\` → ファイルがターミナルの今いる場所に無い
+              → \`ls\` と打って practice.rb が表示されるか確認
+              → 表示されなければ \`pwd\` で今いる場所を確認し、\`cd フォルダ名\` で移動
+            - \`command not found: puts\` → ターミナルに直接Rubyコードを打っている
+              → Rubyコードはファイルに書く。ターミナルには \`ruby practice.rb\` だけ打つ
+
+            ### ステップ5：irbで試してみる
+            1. ターミナルで \`irb\` と入力してEnter
+            2. プロンプトが \`irb(main):001:0>\` に変わる
+            3. \`puts "Hello"\` と打ってEnter → Hello と表示される
+            4. \`exit\` と打ってirbを終了する`,
+            pitfalls: [
+              "ターミナルに直接 `puts` や `name =` と打つ → `command not found` エラー。ターミナルはRubyではない。`.rb` ファイルに書いて `ruby ファイル名.rb` で実行するか、`irb` でRubyモードに入ってから打つ",
+              "`ruby practice.rb` で `No such file or directory` → ファイルが今いるフォルダに無い。`ls` でファイル一覧を確認、`pwd` で現在地を確認。VSCodeのターミナルなら、開いているフォルダと一致しているはず",
+              "ファイルを保存し忘れる → VSCodeのタブに白い丸●が出ていたら未保存。Cmd+S で保存してから実行",
+              "irbに入ったまま抜けられない → `exit` と打つか Ctrl+D で抜ける。プロンプトが `irb(main)` になっていたらirbの中にいる",
+            ],
+          },
+        ],
+        rubyBeginner_1: [
+          {
+            num: 2,
+            title: "プログラムの基礎",
+            time: "2時間（小テストあり）",
+            goal: "変数とは何かを理解し値を代入できる。式展開 `#{}` を使える。irbでRubyを実行できる",
+            concepts: [
+              "変数 = 箱に名前をつけて値を入れる。`=` は「入れる」であって「等しい」ではない",
+              '式展開 `#{}` = 文字列の中に変数の中身を埋め込む魔法。ダブルクォート"の中でだけ使える',
+              "irb = その場でRubyを試せる実験場。ファイルに書く前にここで試せ。1行ずつ結果が見える",
+            ],
+            steps: `### 練習の進め方
+            1. VSCodeで \`practice.rb\` を開く（前のステップで作ったファイル）
+            2. 中身を全部消して、新しいコードを書く
+            3. Cmd+S で保存
+            4. ターミナルで \`ruby practice.rb\` を実行
+            5. 結果を確認 → コードの数字や名前を自分で変えてみる → もう一度実行`,
+            code: 'name = "タケル"\nage = 38\nputs "私は#{name}、#{age}歳です"\n\n# 自分で変えてみよう：\n# 1. name を自分の名前に変える\n# 2. age を自分の年齢に変える\n# 3. 実行して結果を確認する',
+            pitfalls: [
+              "ダブルクォート`\"`とシングルクォート`'`の違い → `'#{name}'` だと式展開が効かず文字がそのまま出る。式展開を使うときは必ず`\"`で囲む",
+              "変数名に日本語を使う → エラーになる。英小文字とアンダースコア（`_`）で命名する。例：`my_name`、`user_age`",
+              '`=`（代入）と `==`（比較）を混同 → `name = "タケル"` は「入れる」、`name == "タケル"` は「同じか確認」。今は `=` だけ覚えればOK',
+              "ターミナルにコードを直接打つ癖が出る → 必ず .rb ファイルに書いて保存してから `ruby ファイル名.rb` で実行。慣れるまでは「書く→保存→実行」を声に出すくらいでちょうどいい",
+            ],
+          },
+        ],
+        rubyBeginner_2: [
+          {
+            num: 3,
+            title: "条件分岐、繰り返し処理",
+            time: "2時間（小テストあり）",
+            goal: "if/else/elsifを使った条件分岐、&&（AND）や||（OR）の論理演算子、times/whileを使った繰り返し処理を実装できる",
+            concepts: [
+              "if文 = 「もし〜なら」。プログラムが自分で判断する仕組み",
+              "論理演算子 = 複数条件を組み合わせる。`&&`は全部満たす、`||`はどれか1つ",
+              "ループ = 同じことを1万回やらせても1行。これが人間との決定的な違いだ",
+            ],
+            code: 'hp = 30\nif hp > 50\n  puts "まだ戦える！"\nelsif hp > 20\n  puts "回復した方がいい..."\nelse\n  puts "逃げろ！"\nend\n\n5.times { |i| puts "#{i+1}回目の素振り！" }',
+            pitfalls: [
+              "`elsif` を `elseif` と書く → Rubyでは `elsif`（eが無い）",
+              "`=` と `==` の混同 → `if x = 5` は代入、`if x == 5` が比較",
+              "無限ループ → `while` で条件が永遠にtrueのまま。Ctrl+Cで脱出",
+              "`&&` と `||` の優先順位 → `&&` の方が `||` より先に評価される",
+            ],
+          },
+        ],
+        rubyBeginner_3: [
+          {
+            num: 4,
+            title: "情報をまとめる配列",
+            time: "2時間（小テストあり）",
+            goal: "配列の概念と基本的な書き方を理解。eachメソッドを使用した繰り返し処理ができる",
+            concepts: [
+              "配列 = ロッカー。番号（インデックス）つきの棚にデータが並ぶ",
+              "インデックスは0から始まる。1じゃない。これは鉄則だ",
+              "each = 「全員に同じことをしろ」という命令。ループの進化形",
+            ],
+            code: 'party = ["タケル", "リナ", "ゴルド"]\nparty.each do |member|\n  puts "#{member}、出撃！"\nend\nputs "パーティー人数: #{party.length}人"',
+            pitfalls: [
+              "インデックス0始まりを忘れる → `party[1]` は2番目。最初は `party[0]`",
+              "配列の範囲外アクセス → `party[100]` は `nil`（エラーにならない分、気づきにくい）",
+              "`do...end` と `{ }` の使い分けがわからない → 複数行は `do...end`、1行は `{ }`",
+            ],
+          },
+        ],
+        rubyBeginner_4: [
+          {
+            num: 5,
+            title: "配列で扱うメソッド",
+            time: "2時間（小テストあり）",
+            goal: "push/pop/shift/unshiftで追加・削除、find/select/rejectで検索・抽出、mapで変換、include?/empty?で状態確認できる",
+            concepts: [
+              "push/pop = 末尾から出し入れ（スタック）。unshift/shift = 先頭から（キュー）",
+              "select = 条件に合うものだけ集める。reject = 条件に合わないものを集める。逆の関係",
+              "map = 全員に変身させる。元の配列は変わらない。新しい配列が返る",
+            ],
+            code: "numbers = [1, 2, 3, 4, 5]\neven = numbers.select { |n| n.even? }     # => [2, 4]\ndoubled = numbers.map { |n| n * 2 }       # => [2, 4, 6, 8, 10]\nnumbers.include?(3)                        # => true",
+            pitfalls: [
+              "`map` と `each` の違いがわからない → `each`は「実行するだけ」、`map`は「新しい配列を返す」",
+              "破壊的メソッド（`!`付き）を知らずに使う → `map!` は元の配列を変えてしまう",
+              "`select` の条件ブロックで `true/false` を返さない → 最後の式の値が評価される",
+            ],
+          },
+        ],
+        rubyBeginner_5: [
+          {
+            num: 6,
+            title: "名前と値をセットにするハッシュ",
+            time: "2時間（小テストあり）",
+            goal: "ハッシュの書き方を理解。配列とハッシュの違いを説明できる。ハッシュから値を取得・繰り返し処理できる",
+            concepts: [
+              "ハッシュ = 辞書。名前（キー）で引く。配列は番号で引く。それが違い",
+              'シンボル `:name` = 軽い名札。文字列`"name"`より高速。Rubyではシンボルをキーに使え',
+              "`person[:name]` = ハッシュからキーで値を取る。存在しないキーは `nil` が返る",
+            ],
+            code: 'adventurer = { name: "タケル", job: "見習い", level: 1, hp: 100 }\nputs adventurer[:name]   # => "タケル"\nadventurer.each do |key, value|\n  puts "#{key}: #{value}"\nend',
+            pitfalls: [
+              'シンボルと文字列の混同 → `{ name: "A" }` と `{ "name" => "A" }` は別物。アクセス方法も違う',
+              "存在しないキーでアクセス → エラーにならず `nil` が返る。気づかずバグの原因に",
+              'ハッシュのネスト → `{ user: { name: "A" } }` は `hash[:user][:name]` でアクセス',
+            ],
+          },
+        ],
+        rubyBeginner_6: [
+          {
+            num: 7,
+            title: "まとまりを分けるメソッド",
+            time: "2時間（小テストあり）",
+            goal: "メソッドの定義と呼び出し、引数（通常・デフォルト値・キーワード引数）、スコープの概念を理解する",
+            concepts: [
+              "メソッド = 技に名前をつける。同じ処理を何度も書くな、1回定義して呼び出せ",
+              "引数 = 技の材料。同じ技でも渡す材料で結果が変わる",
+              "スコープ = メソッドの中で作った変数は外から見えない。部屋のドアと同じだ",
+            ],
+            code: 'def attack(name, weapon: "剣", power: 10)\n  damage = power + rand(5)\n  puts "#{name}の#{weapon}攻撃！ #{damage}ダメージ！"\nend\n\nattack("タケル")\nattack("タケル", weapon: "斧", power: 20)',
+            pitfalls: [
+              "メソッド名に大文字を使う → Rubyでは小文字+アンダースコア（スネークケース）が規則",
+              "戻り値を理解していない → Rubyは最後に評価された式が自動で戻り値になる（`return`省略可）",
+              "スコープ違反 → メソッド外で定義した変数はメソッド内で使えない",
+            ],
+          },
+        ],
+        rubyBeginner_7: [
+          {
+            num: 8,
+            title: "オブジェクトの種類を決めるクラス",
+            time: "3時間（小テストあり）",
+            goal: "クラスを定義しインスタンスを作成。インスタンス変数・メソッド・クラスメソッドの違い。継承、privateメソッドを理解",
+            concepts: [
+              "クラス = 設計図。インスタンス = 設計図から作った実物。設計図が1枚あれば実物は何個でも作れる",
+              "`@変数` = そのインスタンスだけが持つ荷物。他のインスタンスの`@変数`とは別物",
+              "継承 = 親の技を子が受け継ぐ。子は親にない新技も追加できる",
+            ],
+            code: 'class Adventurer\n  def initialize(name, job)\n    @name = name\n    @job = job\n    @level = 1\n  end\n\n  def introduce\n    puts "#{@name}（#{@job}）Lv.#{@level}"\n  end\nend\n\nclass Warrior < Adventurer\n  def heavy_slash\n    puts "#{@name}の大剣斬り！"\n  end\nend\n\nhero = Warrior.new("タケル", "戦士")\nhero.introduce\nhero.heavy_slash',
+            pitfalls: [
+              "クラスとインスタンスの混同 → `Adventurer` は設計図、`hero` は実物",
+              "`@変数` と普通の変数の混同 → `@name` はインスタンスに紐づく、`name` はメソッド内だけ",
+              "`initialize` のスペルミス → メソッド名が違うと `.new` 時に実行されない",
+              "privateメソッドを外から呼ぼうとする → `NoMethodError` が出る",
+            ],
+          },
+        ],
+        rubyBeginner_8: [
+          {
+            num: 9,
+            title: "メソッドを共通して使うモジュール",
+            time: "2時間（小テストあり）",
+            goal: "モジュールを定義し、include と extend の違いを理解。モジュールとクラスの違いを説明できる",
+            concepts: [
+              "モジュール = 「技の巻物」。クラスに読み込ませて共通機能を配る。設計図じゃない",
+              "include = インスタンスメソッドとして使える。extend = クラスメソッドとして使える",
+              "モジュールはインスタンス化できない。継承もできない。あくまで「配る」専門",
+            ],
+            code: 'module Healable\n  def heal\n    puts "#{@name}はHPを回復した！"\n  end\nend\n\nclass Priest < Adventurer\n  include Healable\nend\n\npriest = Priest.new("ミラ", "僧侶")\npriest.heal',
+            pitfalls: [
+              "モジュールを `new` しようとする → `NoMethodError`。モジュールからインスタンスは作れない",
+              "include と extend を逆にする → `include` はインスタンスメソッド、`extend` はクラスメソッド",
+              "いつクラス、いつモジュールを使うか分からない → 「共通機能を複数クラスに配りたい」ならモジュール",
+            ],
+          },
+        ],
+        rubyBeginner_9: [
+          {
+            num: 10,
+            title: "実際にアプリを作ってみよう",
+            time: "2時間（小テストあり）",
+            goal: "リクエストとレスポンスの概念を理解。HTTPメソッド（GET/POST/PUT/DELETE）を理解。簡単なWebアプリケーションを作成できる",
+            concepts: [
+              "リクエスト = 「これくれ」。レスポンス = 「はいどうぞ」。Webは全部この往復",
+              "GET = 見せろ、POST = 新しく作れ、PUT = 更新しろ、DELETE = 消せ。動詞は4つだけ",
+              "ここまでのRubyの知識が全部Webアプリの裏側で動いている。繋がった",
+            ],
+            pitfalls: [
+              "GETとPOSTの違いが曖昧 → GETはURLに情報が載る（検索）、POSTはボディに隠れる（パスワード等）",
+              "「Webアプリ」が急に難しく感じる → やっていることはRubyの処理+HTMLの表示。新しい概念は少ない",
+            ],
+          },
+        ],
+        rubyBeginner_10: [
+          {
+            num: 11,
+            title: "Rubyの理解をより深めよう",
+            time: "3時間（小テストあり）",
+            goal: "例外処理（begin/rescue/end）を理解。正規表現の基本パターンマッチングができる",
+            concepts: [
+              "例外 = プログラムが「無理！」と叫ぶ瞬間。rescue で「落ち着け、こう対処しろ」と教える",
+              "begin/rescue/end = 「試す→失敗したらこうする」のパターン。エラーで止まらなくなる",
+              "正規表現 = 文字列の中からパターンで検索する呪文。メールアドレスや電話番号のチェックに使う",
+            ],
+            code: 'begin\n  result = 10 / 0\nrescue ZeroDivisionError => e\n  puts "エラー: #{e.message}"\nend',
+            pitfalls: [
+              "`rescue` で全例外をキャッチ → `rescue => e` だけだと広すぎる。具体的な例外クラスを指定すべき",
+              "正規表現を完璧に覚えようとする → 覚えなくていい。必要な時に調べて使えればOK",
+            ],
+          },
+        ],
+        // ===== Rails入門①② =====
+        railsBeginner_0: [
+          {
+            num: 1,
+            title: "アプリの機能を確認しよう（入門①）",
+            time: "1時間",
+            goal: "見本アプリを操作して、実装する9つの機能を把握する",
+            concepts: [
+              "🔴 ゴールを見ずに走るな。まず完成形を触れ。全機能を自分の手で操作しろ",
+              "🔴 MVC = 料理で例えろ。Model=冷蔵庫（データ）、View=お皿（見た目）、Controller=料理人（指示を出す）",
+              "🔴 リクエストの旅: ブラウザ → ルーティング → コントローラ → （モデル→DB） → ビュー → ブラウザ",
+            ],
+            pitfalls: [
+              "`docker compose up` したのにアクセスできない → ポート3000が正しく紐づいているか確認",
+              "ディレクトリ構造を丸暗記しようとする → 使いながら覚える。最初は `app/` と `config/routes.rb` だけ意識",
+            ],
+          },
+        ],
+        railsBeginner_1: [
+          {
+            num: 2,
+            title: "Railsアプリを動かしてみよう",
+            time: "1時間",
+            goal: "`/welcomes` にアクセスしてテキスト表示。MVCの概念を理解。git clone → Docker環境構築 → PRの流れを体験",
+            concepts: [
+              "MVC = Model(冷蔵庫), View(お皿), Controller(料理人)。データ・見た目・制御を分離する設計パターン",
+              "Railsは「お約束」の塊。ファイルの置き場所・名前に全部意味がある（CoC: Convention over Configuration）",
+              "Docker環境: `docker compose build` → `up` → `exec web rails db:create` → `db:migrate` の順で起動",
+            ],
+            pitfalls: [
+              "MVCの役割分担が曖昧 → 「データはModel、見た目はView、つなぐのはController」これだけ",
+              "`docker compose up` 後に `db:create` を忘れる → データベースが存在せずエラー",
+            ],
+          },
+        ],
+        railsBeginner_2: [
+          {
+            num: 3,
+            title: "ユーザー画面を作ってRailsの処理フローを学ぼう",
+            time: "3時間",
+            goal: "scaffoldでユーザーCRUDを生成し、処理フローを体験。ブランチ作成→実装→PRの開発フローを体験",
+            concepts: [
+              "🔴 CRUD = Create, Read, Update, Delete。アプリの基本動作はこの4つだけ",
+              "🟡 RESTful 7アクション = index, new, create, show, edit, update, destroy。CRUDをWebに展開するとこの7つ",
+              "scaffold = 骨組みを一発で生成するコマンド。便利だが、中身を理解せずに使うな",
+            ],
+            code: "docker compose exec web bin/rails generate scaffold user name:string age:integer\ndocker compose exec web bin/rails db:migrate",
+            pitfalls: [
+              "`rails db:migrate` を忘れる → テーブルが存在せずエラー。migrate後は必ず確認",
+              "`:id` がURLに入る理由がわからない → 「どのユーザー？」を特定するための識別番号",
+            ],
+          },
+        ],
+        railsBeginner_3: [
+          {
+            num: 4,
+            title: "デバッグをできるようになろう",
+            time: "3時間",
+            goal: "better_errorsのエラー画面を読める。Rails consoleでデータ確認。デバッグの思考プロセス（分析→仮説→検証）を身につける",
+            concepts: [
+              "🟡 Gem = 他の人が作った便利道具。Gemfileに書いて `bundle install` で導入",
+              "🔴 Rails console = RubyのirbのRails版。DBの中身を直接確認・操作できる最強のデバッグツール",
+              "🔴 エラー画面の読み方: 赤字の1行目がエラー名、2行目がファイルと行番号。そこだけ読め",
+            ],
+            pitfalls: [
+              "エラー画面を見て焦る → 赤字の1行目だけ読め",
+              "`binding.pry` の挿入場所がわからない → 「この変数の中身を見たい」と思った行の直前に入れる",
+            ],
+          },
+        ],
+        railsBeginner_4: [
+          {
+            num: 5,
+            title: "コントローラとビューについて知ろう",
+            time: "4時間",
+            goal: "before_action、params、Strong Parameters、パーシャルを習得する",
+            concepts: [
+              "🟡 before_action = 「全アクションの前にこれをやれ」。共通処理をまとめるDRY原則",
+              "🔴 params = ユーザーからの入力データが全部入っている袋。フォーム、URL、クエリパラメータの3入口",
+              "🔴 Strong Parameters = 「この項目だけ受け取る」と明示するセキュリティ機構。Mass Assignment攻撃を防ぐ",
+            ],
+            code: "# Strong Parameters\nprivate\ndef user_params\n  params.require(:user).permit(:name, :age)\nend\n\n# パーシャル呼び出し\n<%= render 'shared/header' %>",
+            pitfalls: [
+              "`@変数` をコントローラで設定し忘れる → ビューで `nil` エラー",
+              "パーシャルのファイル名に `_` をつけ忘れる → `_header.html.erb` のようにアンダースコア始まり",
+            ],
+          },
+        ],
+        railsBeginner_5: [
+          {
+            num: 6,
+            title: "アプリの機能を確認しよう（入門②）",
+            time: "1時間",
+            goal: "Rails入門②で追加する機能を把握。ユーザー拡張、タスクCRUD、ログイン/ログアウト",
+            concepts: [
+              "入門①で学んだMVC・CRUDの上に、データモデリングと認証を積み上げる",
+              "🔴 ここからが「設計」の世界。AIに「いい感じに作って」では通じない。何が必要かを自分で言え",
+              "見本アプリを触って「何ができるか」を洗い出すのが最初の仕事",
+            ],
+            pitfalls: [
+              "入門①の知識が曖昧なまま進む → MVC・CRUD・ルーティングが不安なら先に復習",
+            ],
+          },
+        ],
+        railsBeginner_6: [
+          {
+            num: 7,
+            title: "モデルについて知ろう",
+            time: "4時間",
+            goal: "ActiveRecordの基本操作をRails consoleで実行。コールバックの概念を理解。クラスメソッドとインスタンスメソッドの違い",
+            concepts: [
+              "🔴 ActiveRecord = RubyのコードでSQLを書かずにDBを操作できる魔法の橋。`User.all`が`SELECT * FROM users`になる",
+              "🔴 命名規則は鉄則: モデル=単数形CamelCase（User）、テーブル=複数形snake_case（users）",
+              "🟡 コールバック = 「保存前にこれをやれ」「削除後にこれをやれ」という自動フック",
+            ],
+            pitfalls: [
+              "`find` と `find_by` の違い → `find` は見つからないと例外、`find_by` は `nil`",
+              "`.new` で作っただけで保存できたと思う → `.save` を呼ばないとDBに入らない",
+            ],
+          },
+        ],
+        railsBeginner_7: [
+          {
+            num: 8,
+            title: "マイグレーションについて知ろう",
+            time: "5時間",
+            goal: "マイグレーションでカラム追加。`db:migrate` / `db:rollback` / `db:migrate:status` を使いこなす。データ型の選択",
+            concepts: [
+              "🔴 マイグレーション = DBの設計変更履歴。コードで管理するから、チームで共有できるし、戻せる",
+              "🔴 schema.rb = 今のDB構造の自動スナップショット。直接編集するな。マイグレーションで変更しろ",
+              "🟡 rollback = 「やっぱりなし」。直前のマイグレーションを取り消す",
+            ],
+            code: "# カラム追加\ndocker compose exec web rails g migration AddTelToUsers tel:string\ndocker compose exec web rails db:migrate\n\n# 巻き戻し\ndocker compose exec web rails db:rollback",
+            pitfalls: [
+              "マイグレーションファイルを直接修正して再実行 → 既に `up` のものは再実行されない。`rollback` してからやり直せ",
+              "`schema.rb` を手動編集 → 絶対にやるな。マイグレーションで変更すれば自動更新される",
+            ],
+          },
+        ],
+        railsBeginner_8: [
+          {
+            num: 9,
+            title: "バリデーションとアソシエーション",
+            time: "5時間",
+            goal: "モデルにバリデーション（入力チェック）を設定できる。アソシエーション（テーブル間の関連付け）を理解",
+            concepts: [
+              "🔴 バリデーション = 「このデータ、本当に保存していいか？」のチェック。ゴミデータを防ぐ門番",
+              "🔴 presence: true = 「空欄禁止」。最もよく使うバリデーション",
+              "🔴 has_many / belongs_to = 「1人のユーザーが複数の投稿を持つ」。矢印の向きを間違えるな",
+            ],
+            code: "class User < ApplicationRecord\n  validates :name, presence: true, length: { maximum: 50 }\n  has_many :boards\nend\n\nclass Board < ApplicationRecord\n  belongs_to :user\nend",
+            pitfalls: [
+              "`has_many` と `belongs_to` の向きを逆にする → 外部キー(`user_id`)がある側が `belongs_to`",
+              "`save` が `false` を返しているのに気づかない → `save!` を使えば例外で教えてくれる",
+            ],
+          },
+        ],
+        railsBeginner_9: [
+          {
+            num: 10,
+            title: "ログイン機能を作ろう",
+            time: "5時間",
+            goal: "セッションの概念を理解。ルーティング（resources / resource）の使い分け。ログイン/ログアウト機能を実装",
+            concepts: [
+              "🔴 セッション = 「このブラウザは誰がログインしているか」を覚える仕組み。`session[:user_id]`に記録",
+              "🟡 resources（複数形）= 複数リソース。/users/1のようにIDで区別。7アクション",
+              "🟡 resource（単数形）= 1つだけのリソース。/profileのようにIDなし。6アクション",
+            ],
+            code: "# ログイン時\nsession[:user_id] = user.id\n\n# 現在のユーザー\ndef current_user\n  @current_user ||= User.find_by(id: session[:user_id])\nend\n\n# ログアウト時\nsession.delete(:user_id)",
+            pitfalls: [
+              "セッションとクッキーの違いが曖昧 → クッキーはブラウザ側、セッションはサーバー側で管理",
+              "`resources` と `resource` を間違える → ログイン関連は `resource :session`（1人分だけ）",
+            ],
+          },
+        ],
+        railsBeginner_10: [
+          {
+            num: 11,
+            title: "ゼロからタスク管理ページを実装しよう",
+            time: "16時間",
+            goal: "ここまでの知識を総動員して、ゼロからタスクCRUD（モデル・コントローラ・ビュー）を自力で作る",
+            concepts: [
+              "🔴 ここが本番だ。教科書なし、ヒントなし。ここまで学んだ全てを使え",
+              "🔴 迷ったら「リクエストの旅」を思い出せ: ルーティング → コントローラ → モデル → ビュー",
+              "🔴 エラーが出たら読め。デバッグしろ。それでもダメなら、何を試したかを整理してから聞け",
+            ],
+            steps:
+              "### 実装の流れ\n1. Task モデル作成（rails g model）\n2. マイグレーション実行\n3. ルーティング設定（resources :tasks）\n4. コントローラ作成（rails g controller）\n5. 各アクション実装（index, new, create, show, edit, update, destroy）\n6. ビュー作成\n7. バリデーション追加\n8. ユーザーとの関連付け（belongs_to / has_many）",
+            pitfalls: [
+              "全部一気に作ろうとする → 1つずつ。まずモデル、次にindex、次にnew/create...",
+              "ルーティングを書き忘れる → `rails routes` で確認する癖をつけろ",
+              "Strong Parametersを書き忘れる → セキュリティホール。必ず `private` に定義",
+            ],
+          },
+        ],
+        // ===== Rails基礎①② =====
+        railsBasic_0: [
+          {
+            num: 1,
+            title: "アプリの機能を確認（基礎①）",
+            time: "1時間",
+            goal: "見本アプリを操作し、全機能を把握。入門との違い（scaffoldなし、全て手作り）を理解",
+            concepts: [
+              "🔴 入門では骨組みを自動生成した。今回は自分で骨を削る。見本を触れ。何が必要か全部洗い出せ",
+              "入門は「知る・触れる」、基礎は「自分で作る」。手取り足取りは減る",
+              "AIへの指示も変わる: 「作って」ではなく「この設計で、このパターンで作りたい」と伝えろ",
+            ],
+            pitfalls: [
+              "入門の知識が曖昧なまま進む → MVC・CRUD・ルーティングが不安なら先に復習",
+            ],
+          },
+        ],
+        railsBasic_1: [
+          {
+            num: 2,
+            title: "アプリの基本設定を行う",
+            time: "2時間",
+            goal: "git clone → Docker環境構築 → 開発ブランチ作成。generator設定とGemfile管理を自力で行う",
+            concepts: [
+              "🟡 generator設定 = `rails g` で不要なファイルを自動生成させない。プロは必要なものだけ作る",
+              "🔴 Gemfile = プロジェクトの道具箱。バージョンを揃えないとチームで地獄を見る",
+              "🔴 ブランチ戦略 = mainは神聖不可侵。作業は必ずブランチを切ってから",
+            ],
+            pitfalls: [
+              "`docker compose build` でエラー → Dockerfileの構文、インデントのズレが原因が多い",
+              "generator設定の意味がわからず丸写し → 設定なしで `rails g controller` を実行して何が自動生成されるか確認してから設定を入れると理解が深まる",
+            ],
+            exam: {
+              branch: "01_basic_settings",
+              title: "アプリの基本設定を行う",
+              steps:
+                "config/application.rbを編集しgeneratorの設定（skip_routes, helper false, test_framework nil）を追加。RubocopのLintチェックを通す。Git操作でブランチを切りPR提出。",
+              reviewCriteria: [
+                "作業ブランチを切って課題に取り組んでいる",
+                "git操作は指示された通りに行えている",
+                "プルリクエストの提出は適切に行えている",
+                "アプリケーションフォルダ配下にspecが複数存在していない",
+                "RubocopのLintチェックが通る状態になっている",
+              ],
+              rubocop: true,
+              testCode: true,
+            },
+          },
+        ],
+        railsBasic_2: [
+          {
+            num: 3,
+            title: "ヘッダー/フッターを設置",
+            time: "6時間",
+            goal: "`application.html.erb` の役割理解。パーシャルでヘッダー・フッター共通化。CSSフレームワークでレイアウト",
+            concepts: [
+              "🔴 `application.html.erb` = 全ページの外枠。`<%= yield %>` に各ページの中身が入る。家の壁と天井だ",
+              "🔴 パーシャル = 部品化。`_header.html.erb` のアンダースコアが目印。DRY原則の実践",
+              "🟡 CSSフレームワーク = 見た目を効率的に整える。まず動くものを作れ。デザインの凝り過ぎは後",
+            ],
+            pitfalls: [
+              "`<%= yield %>` を書き忘れる → 各ページの中身が表示されない",
+              "パーシャルのパスを間違える → `render 'shared/header'` は `app/views/shared/_header.html.erb` を探す",
+            ],
+            exam: {
+              branch: "02_header_footer",
+              title: "全ページにヘッダー/フッターを設置",
+              steps:
+                "app/views/shared/に_header.html.erbと_footer.html.erbを作成。application.html.erbにrenderでパーシャルを埋め込み。ルーティング・コントローラ・ビュー・CSS・画像を配置してトップページを構築。",
+              reviewCriteria: [
+                "ヘッダーに「掲示板」「掲示板一覧」「掲示板作成」「ブックマーク一覧」「プロフィール」「ログアウト」が表示されていること",
+                "フッターに「Copyright」が表示されていること",
+              ],
+              rubocop: false,
+              testCode: true,
+            },
+          },
+        ],
+        railsBasic_3: [
+          {
+            num: 4,
+            title: "ユーザー機能を作成しよう",
+            time: "16時間",
+            goal: "Sorceryでユーザー登録・ログイン・ログアウト機能を自力実装。パスワードのハッシュ化を理解",
+            concepts: [
+              "🔴 Sorcery = 認証gem。Deviseより軽量で中身が見える。学習向き",
+              "🔴 パスワードは平文保存厳禁。bcryptでハッシュ化。元に戻せない一方通行の変換",
+              "🟡 `authenticated?` メソッドでパスワード照合。入力値をハッシュ化して保存値と比較",
+            ],
+            pitfalls: [
+              "Sorceryの初期設定を飛ばす → `rails g sorcery:install` を忘れずに",
+              "`has_secure_password` とSorceryを混同 → Sorceryを使うならSorceryの流儀に従え",
+            ],
+            exam: {
+              branch: "03_has_secure_password",
+              title: "ユーザー機能を作成しよう",
+              steps:
+                "bcrypt導入、Userモデル作成（email/password_digest/first_name/last_name）、マイグレーション実行。ApplicationControllerに認証ヘルパー実装。ユーザー登録・ログイン・ログアウト機能をコントローラ・ビューで実装。ログイン状態でヘッダー表示を切り替え。",
+              reviewCriteria: [
+                "姓・名・メールがあり、パスワードが3文字以上であればユーザーが有効であること",
+                "メールアドレスがユニークであること",
+                "メールアドレス・姓・名が必須であること",
+                "姓名が255文字以下であること",
+                "ログイン前にヘッダーに「ログイン」と表示されていること",
+                "フッターに「Copyright」と表示されていること",
+                "ログイン後、ヘッダーに「掲示板」「ブックマーク一覧」などのリンクが正しく表示されていること",
+                "正しい認証情報でログインが成功し、ルートパスにリダイレクトされること",
+                "誤ったパスワードでログインが失敗し、ログイン画面に留まること",
+                "ログアウトが成功し、ルートパスにリダイレクトされること",
+                "正常な入力情報でユーザーが新規作成できること",
+                "不足した入力情報ではユーザーが新規作成できないこと",
+              ],
+              rubocop: false,
+              testCode: true,
+            },
+          },
+        ],
+        railsBasic_4: [
+          {
+            num: 5,
+            title: "i18nによる日本語化対応",
+            time: "4時間",
+            goal: "i18n（国際化）の仕組みを理解。エラーメッセージ・モデル名・属性名を日本語化",
+            concepts: [
+              "🟡 i18n = internationalization（国際化）。アプリの表示言語を切り替える仕組み",
+              "🔴 `config/locales/ja.yml` に日本語定義を書く。YAMLのインデントが命",
+              "🟡 `t('xxx')` ヘルパーで翻訳を呼び出す。ハードコーディングよりDRY",
+            ],
+            pitfalls: [
+              "YAMLのインデントがずれる → スペース2つ厳守。タブ文字は使うな",
+              "i18nの設定が反映されない → `config/application.rb` に `config.i18n.default_locale = :ja` を追加してサーバー再起動",
+            ],
+            exam: {
+              branch: "04_i18n",
+              title: "i18nによる日本語化対応",
+              steps:
+                "config/locales/ja.ymlにモデル名・属性名の日本語訳を定義。ログインページ・新規登録ページのフォームlabelをi18n対応。ユーザー登録画面の文言もi18n化。",
+              reviewCriteria: [
+                "ログインページのemailフォームのlabelが「メールアドレス」と表記されている",
+                "ログインページのpasswordフォームのlabelが「パスワード」と表記されている",
+                "新規登録ページのlast_nameフォームのlabelが「姓」と表記されている",
+                "新規登録ページのfirst_nameフォームのlabelが「名」と表記されている",
+                "新規登録ページのemailフォームのlabelが「メールアドレス」と表記されている",
+                "新規登録ページのpasswordフォームのlabelが「パスワード」と表記されている",
+                "新規登録ページのpassword_confirmationフォームのlabelが「パスワード確認」と表記されている",
+              ],
+              rubocop: false,
+              testCode: true,
+            },
+          },
+        ],
+        railsBasic_5: [
+          {
+            num: 6,
+            title: "フラッシュメッセージの設定",
+            time: "6時間",
+            goal: "フラッシュメッセージ（success/danger）を表示。ページ遷移後に1回だけ表示される仕組みを理解",
+            concepts: [
+              "🔴 flash = 次のリクエストだけ生きるメッセージ。「保存しました」「エラーです」の通知",
+              "🟡 `flash[:success]` と `flash.now[:danger]` の違い → 次のリクエスト vs 現在のリクエスト",
+              "パーシャルでflash表示部分を共通化する",
+            ],
+            pitfalls: [
+              "`flash` と `flash.now` の使い分け → redirect_toの前はflash、renderの前はflash.now",
+            ],
+            exam: {
+              branch: "05_flash_messages",
+              title: "フラッシュメッセージの設定",
+              steps:
+                "ユーザー登録・ログイン・ログアウトの各アクションにフラッシュメッセージを設定。成功時はsuccess（緑）、失敗時はdanger（赤）で表示。パーシャルで共通化。",
+              reviewCriteria: [
+                "ユーザー登録成功時に「ユーザー登録が完了しました」とフラッシュメッセージが表示される",
+                "ユーザー登録失敗時に「ユーザー登録に失敗しました」とフラッシュメッセージが表示される",
+                "ログイン成功時に「ログインしました」とフラッシュメッセージが表示される",
+                "ログイン失敗時に「ログインに失敗しました」とフラッシュメッセージが表示される",
+                "ログアウト成功時に「ログアウトしました」とフラッシュメッセージが表示される",
+              ],
+              rubocop: false,
+              testCode: true,
+            },
+          },
+        ],
+        railsBasic_6: [
+          {
+            num: 7,
+            title: "デコレーターの導入",
+            time: "4時間",
+            goal: "Draper gemでデコレーターパターンを実装。ビューのロジックをモデルから分離する設計を理解",
+            concepts: [
+              "🟡 デコレーター = ビューでの表示ロジックを整理する層。モデルを太らせるな",
+              "「日付を○月○日形式で」「名前がなければ'名無し'」→ ビューのif文をデコレーターに移す",
+              "🔵 Draper gemで `UserDecorator` を作り、`decorate` メソッドで呼び出す",
+            ],
+            pitfalls: [
+              "デコレーターとヘルパーの違いが曖昧 → デコレーターはモデルに紐づく、ヘルパーは汎用的",
+            ],
+            exam: {
+              branch: "06_decorator",
+              title: "デコレーターの導入",
+              steps:
+                "draper gemを導入しUserDecoratorを生成。full_nameメソッドを定義し、last_nameとfirst_nameを半角スペース区切りで結合して返す。",
+              reviewCriteria: [
+                "Userモデルから作成されたインスタンスにfull_nameメソッドを使用した時、last_nameとfirst_nameが並んで表示される",
+                "last_nameとfirst_nameの間に半角スペースが入っている",
+              ],
+              rubocop: false,
+              testCode: true,
+            },
+          },
+        ],
+        railsBasic_7: [
+          {
+            num: 8,
+            title: "掲示板の一覧機能",
+            time: "8時間",
+            goal: "掲示板のindexアクションを自力実装。N+1問題を理解し、includesで解決",
+            concepts: [
+              "🔴 N+1問題 = 1回のクエリで一覧を取得した後、関連データを1件ずつ追加クエリ。100件あれば101回SQLが走る",
+              "🔴 `includes(:user)` で事前読み込み（Eager Loading）。SQL2回で済む",
+              "form_withでフォームを作成。`model:` オプションでRailsが自動でURLとHTTPメソッドを判定",
+            ],
+            pitfalls: [
+              "N+1問題に気づかない → `bullet` gemを入れると警告してくれる",
+              "`form_with` のデフォルトはAjax送信（`local: false`）→ 通常送信なら `local: true` を明示",
+            ],
+            exam: {
+              branch: "07_board_index",
+              title: "掲示板の一覧機能の作成",
+              steps:
+                "Boardモデル作成（title/body/user_id）、バリデーション設定。掲示板一覧画面を実装し、タイトル・投稿者フルネーム・本文を表示。未ログイン時はログインページへリダイレクト。",
+              reviewCriteria: [
+                "全フィールドが有効な場合boardオブジェクトが有効である",
+                "titleがnilの場合boardオブジェクトが無効で「を入力してください」エラーが含まれる",
+                "bodyがnilの場合boardオブジェクトが無効で「を入力してください」エラーが含まれる",
+                "titleが255文字以下の場合boardオブジェクトが有効である",
+                "titleが256文字以上の場合boardオブジェクトが無効で「は255文字以内で入力してください」エラーが含まれる",
+                "bodyが65535文字以内の場合boardオブジェクトが有効である",
+                "bodyが65536文字以上の場合boardオブジェクトが無効で「は65535文字以内で入力してください」エラーが含まれる",
+                "未ログインで/boardsにアクセスするとログインページにリダイレクトされ「ログインしてください」が表示される",
+                "ログイン成功すると掲示板一覧ページへ遷移する",
+                "ヘッダーのリンクから掲示板一覧へ遷移できる",
+                "掲示板が一件もない場合「掲示板がありません」と表示される",
+                "掲示板のタイトル・投稿者フルネーム・本文が表示される",
+              ],
+              rubocop: false,
+              testCode: true,
+            },
+          },
+        ],
+        railsBasic_8: [
+          {
+            num: 9,
+            title: "掲示板作成機能",
+            time: "8時間",
+            goal: "掲示板のnew/createアクションを実装。バリデーションエラー時の画面遷移を理解",
+            concepts: [
+              "🔴 new = フォーム表示、create = データ保存。この2つはセット",
+              "バリデーションエラー時は `render :new` で同じフォームを再表示。redirect_toではない",
+              "🔴 `current_user.boards.build(board_params)` で自動的にuser_idが設定される",
+            ],
+            pitfalls: [
+              "バリデーションエラー時に `redirect_to` する → 入力内容が消える。`render :new` を使え",
+              "`build` と `new` の違いがわからない → `build` はアソシエーション経由で自動的に外部キーをセット",
+            ],
+            exam: {
+              branch: "08_create_board",
+              title: "掲示板作成機能",
+              steps:
+                "掲示板のnew/createアクションを実装。フォームからタイトル・本文を入力して掲示板を作成。成功時は一覧へリダイレクトしフラッシュ表示、失敗時もフラッシュ表示。",
+              reviewCriteria: [
+                "未ログインで/boards/newにアクセスするとログインページにリダイレクトされ「ログインしてください」が表示される",
+                "ログインユーザーが「掲示板作成」リンクをクリックすると掲示板作成ページに遷移する",
+                "タイトルと本文を入力し「登録」ボタンで新しい掲示板が作成される",
+                "掲示板作成成功時、一覧ページにリダイレクトされ「掲示板を作成しました」と表示される",
+                "作成された掲示板のタイトルと本文が一覧ページに表示される",
+                "必須項目未入力の場合「掲示板を作成出来ませんでした」と表示される",
+              ],
+              rubocop: false,
+              testCode: true,
+            },
+          },
+        ],
+        railsBasic_9: [
+          {
+            num: 10,
+            title: "エラー情報を個別表示",
+            time: "4時間",
+            goal: "バリデーションエラーをフィールドごとに表示する。共通化パーシャルで再利用可能にする",
+            concepts: [
+              "🔴 `object.errors.full_messages_for(:name)` で特定フィールドのエラーだけ取得",
+              "エラー表示をパーシャル化して全フォームで再利用する",
+              "🟡 CSSクラスでエラー箇所を視覚的に強調する",
+            ],
+            pitfalls: [
+              "全エラーを一箇所にまとめて表示 → ユーザーはどこが間違いか分からない。フィールドの近くに表示しろ",
+            ],
+            exam: {
+              branch: "09_form_error_messages",
+              title: "フォーム入力時エラー情報を個別表示",
+              steps:
+                "掲示板作成フォーム（boards/new）とユーザー登録フォーム（users/new）でバリデーションエラーをフィールドごとに個別表示する実装を行う。",
+              reviewCriteria: [
+                "本文未入力で掲示板新規登録しようとすると「本文を入力してください」が表示される",
+                "名前・パスワード未入力でユーザー新規登録しようとすると「姓を入力してください」「名を入力してください」「パスワードは3文字以上で入力してください」が表示される",
+              ],
+              rubocop: false,
+              testCode: true,
+            },
+          },
+        ],
+        railsBasic_10: [
+          {
+            num: 11,
+            title: "画像アップロード機能",
+            time: "12時間",
+            goal: "CarrierWaveまたはActiveStorageで画像アップロード機能を実装",
+            concepts: [
+              "🔴 ファイルアップロードはフォームに `multipart: true` が必要",
+              "🟡 CarrierWave = アップローダークラスでファイル処理を定義。リサイズ、保存先、許可する拡張子",
+              "画像がなければデフォルト画像を表示する仕組みも作る",
+            ],
+            pitfalls: [
+              "フォームに `multipart: true` を忘れる → ファイルが送信されない",
+              "巨大画像を無制限にアップロード可能にする → ファイルサイズと拡張子をバリデーションで制限",
+            ],
+            exam: {
+              branch: "10_upload_board_image",
+              title: "画像アップロード機能",
+              steps:
+                "CarrierWaveで掲示板に画像アップロード機能を追加。フォームにファイル添付欄を設置。許可する拡張子（jpg, jpeg, png, gif）をバリデーション。",
+              reviewCriteria: [
+                "掲示板作成フォームで画像ファイルを添付できる",
+                "正しいファイル形式（jpg, jpeg, png, gif）の画像が添付された場合に掲示板が正常に作成される",
+                "不正なファイル形式（jpg, jpeg, png, gif以外）の画像が添付された場合に掲示板作成が失敗する",
+              ],
+              rubocop: false,
+              testCode: true,
+            },
+          },
+        ],
+        railsBasic_11: [
+          {
+            num: 12,
+            title: "詳細画面/コメント機能",
+            time: "16時間",
+            goal: "掲示板詳細画面とコメント機能を実装。ネストしたリソースのルーティングを理解",
+            concepts: [
+              "🔴 ネストしたリソース: `resources :boards do resources :comments end` → `/boards/1/comments`",
+              "🔴 コメントは掲示板に属する（belongs_to :board）。URLで「どの掲示板のコメントか」を特定",
+              "showアクションで掲示板の詳細とコメント一覧を同時表示",
+            ],
+            pitfalls: [
+              "ネストが深すぎる → 2段階まで。3段階以上は設計を見直せ",
+              "コメントのcreate後のリダイレクト先を間違える → `board_path(@board)` で親の掲示板に戻る",
+            ],
+            exam: {
+              branch: "11_create_comment",
+              title: "掲示板詳細画面の追加/コメント機能の実装",
+              steps:
+                "掲示板詳細画面（show）を実装しタイトル・投稿者・本文を表示。Commentモデル作成、ネストしたルーティングでコメント投稿・一覧表示機能を実装。",
+              reviewCriteria: [
+                "未ログインで掲示板詳細ページにアクセスするとログインページにリダイレクトされ「ログインしてください」が表示される",
+                "掲示板一覧から特定の掲示板のタイトルリンクをクリックして詳細ページに遷移できる",
+                "掲示板詳細ページでタイトル・投稿者フルネーム・本文が表示される",
+                "掲示板詳細ページでコメント一覧が表示される（本文・投稿者フルネーム）",
+                "他人のコメントには編集ボタンと削除ボタンが表示されない",
+                "新しいコメントを入力し「投稿」ボタンでコメントを作成できる",
+                "作成されたコメントが詳細画面に表示され投稿者フルネームとコメント本文が正しく表示される",
+                "コメント本文が空の場合「コメントを作成出来ませんでした」とエラーメッセージが表示される",
+                "Commentモデル: 属性全てが有効な場合コメントが有効である",
+                "Commentモデル: 本文が空の場合「本文を入力してください」エラーが表示される",
+                "Commentモデル: 本文が65535文字以内の場合コメントが有効である",
+                "Commentモデル: 本文が65536文字以上の場合「本文は65535文字以内で入力してください」エラーが表示される",
+              ],
+              rubocop: false,
+              testCode: true,
+            },
+          },
+        ],
+        railsBasic_12: [
+          {
+            num: 13,
+            title: "タイトルを動的に出力",
+            time: "4時間",
+            goal: "`content_for` と `yield` でページごとに異なるタイトルを動的に設定する",
+            concepts: [
+              "🟡 `content_for :title` でページごとの値を設定し、`yield :title` でレイアウトに出力",
+              "SEO的にも各ページにユニークなタイトルをつけるのは重要",
+              "🔵 デフォルト値の設定: `yield(:title) || 'デフォルトタイトル'`",
+            ],
+            pitfalls: [
+              "`content_for` を書き忘れるページがある → デフォルト値を必ず設定しておく",
+            ],
+            exam: {
+              branch: "12_dynamic_title",
+              title: "タイトルを動的に出力する",
+              steps:
+                "content_forとyieldを使い、各ページで異なるタイトルを動的に出力。「ページ名 | RUNTEQ BOARD APP」形式。デフォルトは「RUNTEQ BOARD APP」。",
+              reviewCriteria: [
+                "掲示板一覧ページのタイトルが「掲示板一覧 | RUNTEQ BOARD APP」と表示される",
+                "掲示板詳細ページのタイトルが「掲示板タイトル | RUNTEQ BOARD APP」と表示される",
+                "掲示板作成ページのタイトルが「掲示板作成 | RUNTEQ BOARD APP」と表示される",
+                "トップページのタイトルが「RUNTEQ BOARD APP」と表示される",
+                "ログインページのタイトルが「ログイン | RUNTEQ BOARD APP」と表示される",
+                "ユーザー登録ページのタイトルが「ユーザー登録 | RUNTEQ BOARD APP」と表示される",
+              ],
+              rubocop: false,
+              testCode: true,
+            },
+          },
+        ],
+        railsBasic_13: [
+          {
+            num: 14,
+            title: "編集、削除機能",
+            time: "11時間",
+            goal: "掲示板のedit/update/destroyを実装。認可（自分の投稿だけ編集/削除可能）を理解",
+            concepts: [
+              "🔴 認可 = 「この人にこの操作をする権限があるか？」のチェック。認証（ログイン）とは別",
+              "🔴 `@board.user == current_user` で自分の投稿かチェック。他人の投稿を編集させるな",
+              "🟡 `link_to` に `method: :delete` と確認ダイアログ `data: { confirm: '本当に？' }` を設定",
+            ],
+            pitfalls: [
+              "認可チェックを忘れる → 他人の投稿を編集/削除できるセキュリティホール",
+              "DELETEリクエストがGETになる → JavaScriptが読み込まれているか確認",
+            ],
+            exam: {
+              branch: "13_board_edit_delete",
+              title: "掲示板の編集、削除機能の実装",
+              steps:
+                "掲示板のedit/update/destroyアクションを実装。自分の掲示板のみ編集・削除可能にする認可チェック。他人の掲示板へのアクセスはRecordNotFoundエラー。",
+              reviewCriteria: [
+                "未ログインで掲示板編集ページにアクセスするとログインページにリダイレクトされ「ログインしてください」が表示される",
+                "自分の掲示板の編集ページに遷移できる",
+                "タイトル入力済み・本文空で「更新」すると更新失敗メッセージが表示される",
+                "タイトルと本文を編集し「更新」すると掲示板が更新され詳細ページにリダイレクトされる",
+                "更新後の詳細ページで更新成功メッセージ・編集後のタイトル・本文が表示される",
+                "他人の掲示板一覧ページに編集ボタンが表示されない",
+                "自分の掲示板に削除ボタンが表示される",
+                "削除ボタンをクリックし確認ダイアログで「OK」すると掲示板が削除され一覧ページにリダイレクトされる",
+                "削除後「掲示板を削除しました」とフラッシュメッセージが表示される",
+                "他人の掲示板に削除ボタンが表示されない",
+                "他人の掲示板の編集ページに直接アクセスするとActiveRecord::RecordNotFoundエラーが発生する",
+                "他人の掲示板を更新・削除しようとするとActiveRecord::RecordNotFoundエラーが発生する",
+                "gem 'better_errors'のエラー画面ではないこと",
+              ],
+              rubocop: false,
+              testCode: true,
+            },
+          },
+        ],
+        railsBasic_14: [
+          {
+            num: 15,
+            title: "アプリの機能を確認（基礎②）",
+            time: "1時間",
+            goal: "Rails基礎②で追加する高度な機能を把握。ブックマーク、Ajax、ページネーション、検索、管理画面",
+            concepts: [
+              "基礎①で作った掲示板アプリに高度な機能を追加していく",
+              "🔴 Ajax = ページ遷移なしでデータを送受信する技術。UXが劇的に向上する",
+              "管理画面は名前空間（namespace）で分離する。一般ユーザーと管理者を明確に分ける",
+            ],
+            pitfalls: [
+              "基礎①の実装が不完全なまま進む → ブックマークやAjaxは既存機能の上に載る。土台が揺らいでいたら先に直せ",
+            ],
+          },
+        ],
+        railsBasic_15: [
+          {
+            num: 16,
+            title: "ブックマーク機能",
+            time: "12時間",
+            goal: "多対多のリレーション（中間テーブル）を理解。ブックマーク（お気に入り）機能を実装",
+            concepts: [
+              "🔴 多対多 = ユーザーと掲示板の間に中間テーブル（bookmarks）を置く。`has_many :through`",
+              "🔴 中間テーブルには外部キーが2つ: `user_id` と `board_id`。この組み合わせにuniqueness制約",
+              "🟡 `bookmarked_by?(user)` のようなメソッドをモデルに定義して判定を簡潔に",
+            ],
+            pitfalls: [
+              "中間テーブルの外部キーの向きを間違える → 「誰が」「何を」ブックマークしたか、で考える",
+              "同じ掲示板を2回ブックマークできてしまう → uniqueness制約（`scope`付き）で防ぐ",
+            ],
+          },
+        ],
+        railsBasic_16: [
+          {
+            num: 17,
+            title: "ブックマークのajax化",
+            time: "8時間",
+            goal: "ブックマークの追加/解除をAjax（非同期通信）で実装。ページ遷移なしでUIを更新",
+            concepts: [
+              "🔴 Ajax = ページ全体をリロードせずに一部だけ更新。「いいね」ボタンを押してもページが動かない",
+              "🟡 `respond_to` でHTML/JS両方に対応。JSリクエストには `.js.erb` テンプレートで応答",
+              "Turbo/Stimulusを使う場合はTurbo Framesで部分更新する",
+            ],
+            pitfalls: [
+              "Ajax後にビューが更新されない → JSテンプレートでDOMを差し替える処理が必要",
+              "CSRFトークンが送信されない → Ajaxリクエストにもトークンを含める設定が必要",
+            ],
+          },
+        ],
+        railsBasic_17: [
+          {
+            num: 18,
+            title: "コメントのajax化",
+            time: "12時間",
+            goal: "コメントの投稿と削除をAjaxで実装。フォーム送信とDOM操作を非同期で行う",
+            concepts: [
+              "コメント投稿後、ページリロードなしでコメント一覧に追加される",
+              "🔴 `remote: true` (Rails 6以前) または Turbo Frames (Rails 7) でフォームをAjax化",
+              "削除もAjax化して、ページ遷移なしでコメントが消える",
+            ],
+            pitfalls: [
+              "コメント追加後にフォームをクリアし忘れる → JSで `$('#form')[0].reset()` を呼ぶ",
+              "バリデーションエラー時のAjaxレスポンスを考慮していない → エラー表示もJS経由で行う",
+            ],
+          },
+        ],
+        railsBasic_18: [
+          {
+            num: 19,
+            title: "ページネーション",
+            time: "8時間",
+            goal: "kaminariまたはpagyでページネーションを実装。大量データを分割表示する",
+            concepts: [
+              "🟡 kaminari = Railsの定番ページネーションgem。`User.page(params[:page]).per(25)`",
+              "🔴 ページネーションなしだと全件取得 → データが増えるとページ表示が激重になる",
+              "🟡 ビューに `<%= paginate @boards %>` を追加するだけでページ送りUIが出る",
+            ],
+            pitfalls: [
+              "N+1問題とページネーションの組み合わせ → `includes` を忘れずに",
+              "Ajax化したページでページネーションが効かない → Ajax対応のページネーション設定が必要",
+            ],
+          },
+        ],
+        railsBasic_19: [
+          {
+            num: 20,
+            title: "検索機能",
+            time: "8時間",
+            goal: "ransackなどの検索gemで掲示板検索機能を実装。部分一致・複数条件での検索",
+            concepts: [
+              "🟡 ransack = Railsの定番検索gem。`@q = Board.ransack(params[:q])` → `@q.result`",
+              "🔴 検索フォームは `search_form_for @q` で生成。`_cont` で部分一致、`_eq` で完全一致",
+              "🔵 ransackなしでも `Board.where('title LIKE ?', \"%#{params[:q]}%\")` で検索可能",
+            ],
+            pitfalls: [
+              "SQLインジェクション → 直接文字列埋め込みは危険。プレースホルダ `?` を使え",
+              "検索結果が0件の場合の表示を忘れる → 「該当する掲示板はありません」を表示",
+            ],
+          },
+        ],
+        railsBasic_20: [
+          {
+            num: 21,
+            title: "プロフィール編集",
+            time: "4時間",
+            goal: "ユーザー自身のプロフィール編集機能。パスワード変更なしでの更新にも対応",
+            concepts: [
+              "🟡 `resource :profile` （単数形）でIDなしのルーティング。自分のプロフィールは1つだけ",
+              "パスワード欄が空なら現在のパスワードを維持する → `reject_if` や条件付きバリデーション",
+              "🔵 アバター画像のアップロードも追加できる",
+            ],
+            pitfalls: [
+              "パスワード欄が空の場合にバリデーションエラーになる → 空の場合は更新対象から除外する処理が必要",
+            ],
+          },
+        ],
+        railsBasic_21: [
+          {
+            num: 22,
+            title: "パスワードリセット",
+            time: "16時間",
+            goal: "パスワードリセット機能を実装。トークンベースの安全なリセットフロー",
+            concepts: [
+              "🔴 パスワードリセットフロー: メール入力 → トークン生成 → メール送信 → トークン検証 → パスワード変更",
+              "🔴 トークンは推測不可能なランダム文字列。有効期限を設定し、使用済みトークンは無効化",
+              "🟡 ActionMailerでメール送信。開発環境では `letter_opener` gemでブラウザ確認",
+            ],
+            pitfalls: [
+              "トークンを平文でDBに保存する → セキュリティリスク。ハッシュ化して保存",
+              "トークンに有効期限をつけない → 古いリセットリンクが永久に有効になる危険",
+            ],
+          },
+        ],
+        railsBasic_22: [
+          {
+            num: 23,
+            title: "[管理画面] ログイン/トップ",
+            time: "12時間",
+            goal: "管理画面を名前空間（namespace）で分離。管理者ログイン機能を実装",
+            concepts: [
+              "🔴 namespace = URLに `/admin/` を付けてルーティング・コントローラ・ビューを分離する仕組み",
+              "🔴 管理者フラグ（`role` カラム）で一般ユーザーと管理者を区別。enumで管理",
+              "管理画面用のレイアウト（`admin.html.erb`）を別途用意する",
+            ],
+            pitfalls: [
+              "namespaceのディレクトリ構造を間違える → `app/controllers/admin/` 配下にコントローラを置く",
+              "一般ユーザーが `/admin/` にアクセスできてしまう → before_actionで管理者チェック必須",
+            ],
+          },
+        ],
+        railsBasic_23: [
+          {
+            num: 24,
+            title: "[管理画面] CRUD",
+            time: "8時間",
+            goal: "管理画面から掲示板・ユーザーのCRUD操作。管理者は全データを編集・削除可能",
+            concepts: [
+              "🔴 管理画面のCRUDは一般ユーザー向けとは権限が異なる。全ユーザーのデータを操作可能",
+              "🟡 管理画面専用のStrong Parametersを定義。管理者だけが変更できる項目を許可",
+              "一覧画面にページネーション・検索・ソートを組み込む",
+            ],
+            pitfalls: [
+              "管理画面のCRUDで一般ユーザーのコントローラを流用 → 権限が混在する。管理画面専用に分離しろ",
+              "管理者が自分自身を削除できてしまう → 最後の管理者は削除不可にするガードを入れる",
+            ],
+          },
+        ],
+        // ===== Rubyで学ぶアルゴリズム =====
+        rubyBasic_0: [
+          {
+            num: 1,
+            title: "線形探索",
+            time: "5時間（小テストあり）",
+            goal: "配列を先頭から順に探すアルゴリズムを実装。O(n)の計算量を体感する",
+            concepts: [
+              "🔴 線形探索 = 先頭から1つずつ順番に確認。最悪の場合、全要素を確認する",
+              "🔴 計算量 O(n) = 要素数nに比例して処理時間が増える。100万件なら100万回チェック",
+              "🟡 Rubyの `find` / `include?` は内部的に線形探索している",
+            ],
+            code: "def linear_search(array, target)\n  array.each_with_index do |element, index|\n    return index if element == target\n  end\n  nil\nend",
+            pitfalls: [
+              "「見つかったら即return」を忘れて全要素を走査し続ける → 早期リターンの習慣をつけろ",
+              "計算量の概念が抽象的すぎる → 実際に1万件と100万件で実行時間を測って体感しろ",
+            ],
+          },
+        ],
+        rubyBasic_1: [
+          {
+            num: 2,
+            title: "二分探索",
+            time: "5時間（小テストあり）",
+            goal: "ソート済み配列を半分ずつ絞って探すアルゴリズムを実装。O(log n)の威力を体感",
+            concepts: [
+              "🔴 二分探索 = ソート済み配列の中央と比較し、半分を捨てる。毎回半分になるから超速い",
+              "🔴 O(log n) = 100万件でも約20回の比較で見つかる。線形探索の100万回と比べろ",
+              "🟡 前提条件: 配列がソート済みでなければ使えない",
+            ],
+            code: "def binary_search(array, target)\n  low = 0\n  high = array.length - 1\n  while low <= high\n    mid = (low + high) / 2\n    if array[mid] == target\n      return mid\n    elsif array[mid] < target\n      low = mid + 1\n    else\n      high = mid - 1\n    end\n  end\n  nil\nend",
+            pitfalls: [
+              "`low <= high` の条件を `low < high` にしてしまう → 要素が1つの場合に見つけられない",
+              "ソートされていない配列に使おうとする → 結果が正しくない。使う前に必ずソート済みか確認",
+            ],
+          },
+        ],
+        rubyBasic_2: [
+          {
+            num: 3,
+            title: "動的計画法",
+            time: "5時間（小テストあり）",
+            goal: "部分問題の結果を再利用するアルゴリズムを実装。メモ化で計算量を劇的に削減",
+            concepts: [
+              "🔴 動的計画法 = 同じ計算を2度やるな。結果を保存して再利用する",
+              "🔴 フィボナッチ数列: 再帰だとO(2^n)で爆発 → メモ化でO(n)に。劇的な差",
+              "🟡 ボトムアップ（for文で小さい方から計算）とトップダウン（再帰+メモ化）の2つのアプローチ",
+            ],
+            code: "# メモ化（トップダウン）\ndef fib(n, memo = {})\n  return n if n <= 1\n  memo[n] ||= fib(n - 1, memo) + fib(n - 2, memo)\nend\n\n# ボトムアップ\ndef fib_bottom_up(n)\n  dp = [0, 1]\n  (2..n).each { |i| dp[i] = dp[i-1] + dp[i-2] }\n  dp[n]\nend",
+            pitfalls: [
+              "メモ化なしの再帰でフィボナッチを書く → n=40でも数秒かかる。n=100では終わらない",
+              "「動的計画法」という名前で難しく感じる → 本質は「計算結果を覚えておいて再利用する」だけ",
+            ],
+          },
+        ],
+      };
+
+      // ===== Prompt Generation =====
+      function generatePrompt(section, cardIdx) {
+        const card = section.cards[cardIdx];
+        const u = state.userName;
+        const m = state.masterName;
+        const sectionKey = getSectionKey(section);
+        const cardKey = sectionKey + "_" + cardIdx;
+        const details = CARD_PROMPT_DETAILS[cardKey];
+        const secretKey = CARD_KEYS[cardKey] || "???";
+
+        let chapterContent = "";
+        if (details) {
+          chapterContent = details
+            .map((ch) => {
+              let s = `\n### 第${ch.num}章: ${ch.title}（目安${ch.time}）\n`;
+              s += `\n**ゴール:** ${ch.goal}\n`;
+              if (ch.prereq) s += `\n${ch.prereq}\n`;
+              if (ch.content) s += `\n**内容:** ${ch.content}\n`;
+              if (ch.concepts) {
+                s += `\n**核心概念（${m}の3つ）:**\n`;
+                ch.concepts.forEach((c, i) => (s += `${i + 1}. **${c}**\n`));
+              }
+              if (ch.steps) s += `\n${ch.steps}\n`;
+              if (ch.code) {
+                s += `\n**コード例:**\n\`\`\`ruby\n${ch.code}\n\`\`\`\n`;
+              }
+              if (ch.pitfalls) {
+                s += `\n**よくある罠:**\n`;
+                ch.pitfalls.forEach((p) => (s += `- ❌ ${p}\n`));
+              }
+              if (ch.exam) {
+                s += `\n**📝 自動レビュー課題:**\n`;
+                s += `- ブランチ: \`${ch.exam.branch}\`\n`;
+                s += `- 課題: ${ch.exam.title}\n`;
+                s += `- 実装: ${ch.exam.steps}\n`;
+                s += `- レビュー基準:\n`;
+                ch.exam.reviewCriteria.forEach((c) => (s += `  - ✅ ${c}\n`));
+                if (ch.exam.rubocop) s += `- ⚠️ Rubocop Lintチェック必須\n`;
+                if (ch.exam.testCode) s += `- ⚠️ テストコード実行必須\n`;
+              }
+              return s;
+            })
+            .join("\n---\n");
+        } else {
+          chapterContent = `\n${card.desc}\n\nまず全体像を示してから、各章の本質を⚡ ${m}の「3つだけ掴め」方式で解説し、🤖 ロボらんてくんがたとえ話で補足してください。各章の「よくある罠」も必ず提示してください。\n`;
+        }
+
+        return `# 呪文 — ${section.title}: ${card.title}
+
+            ## あなたの役割
+
+            あなたは2人のキャラクターとして、RUNTEQ「${section.title}」カリキュラム（${card.chapters}）の学習をサポートする。
+            学習者（${u}）は完全未経験の38歳。冒険者ギルド形式で進める。
+
+            ## ★ このプログラムの核心思想
+
+            従来の学習: 「文法を覚える → 使い方を覚える → コードを書ける」
+            AI時代の学習: **「AIと対話するために、自分が何を分かっていないかを知る」**
+
+            AIは完璧なコードを書ける。しかし、${u}が「何を作りたいか」を正確に伝えられなければ、AIは的外れなものを作る。問題は技術力ではなく**「対話力」**にある。
+
+            ### 理解の温度マップ（すべて同じ深さで学ぶ必要はない）
+            - 🔴 必須 — これが分からないとAIに指示が出せない
+            - 🟡 重要 — 分かると対話の精度が大幅に上がる
+            - 🔵 任意 — 知らなくてもAIに聞けば済む
+
+            ### ⚡ ${m}（AI師匠）
+            - 見た目15歳だが、1000年分の知識を持つ伝説のギルドマスター
+            - **AI時代の学び方**を教える指導者
+            - 口調: 「〜だ。」「〜しろ。」「〜掴め。」（命令形・断定形、1発言2文以内）
+            - 役割: **高い基準を示す、本質を一言で突く、AI時代のプロの視点**を担当
+
+            **${m}の信念（3つの柱）:**
+            - **「逆算で学べ」** — 完成形から逆算する。最初からコツコツ積み上げるな
+            - **「伝える力が全て」** — 構文を暗記するな。AIに正確に伝えられればコードは書ける
+            - **「設計だけは人間がやれ」** — テーブル設計・データ構造はAIに丸投げするな。それ以外は任せろ
+
+            **教え方:**
+            - **「3つだけ掴め」方式** — 概念を教えるとき、必ず重要ポイントを3つに絞る
+            - **「暗記するな、意味で掴め」** が口癖
+            - **「打て。動かせ。」** が基本指示。コードは必ず動かさせる
+            - 写した後、必ず「数字を変えろ」「名前を変えろ」と自分で変えさせる
+            - よくある罠を先回りで教える。エラーが出たら「まず読め」と言う
+            - 「分かった気」を防ぐため、クリア前に確認問題を出す
+
+            **厳しさのルール（重要）:**
+            - ✅ OK: 行動への指摘 →「考えた形跡が見えない。どこまで調べた？」
+            - ❌ NG: 人格否定 →「君は考える力がない」
+            - ✅ OK: 具体的な改善点 →「質問に"自分の状況"が書かれていない。書き直せ」
+            - ❌ NG: 突き放し →「こんな質問では何も解決しない。やり直せ」
+            - **厳しいが、必ず道を示す。指摘した後に必ず「こうしろ」を添える。突き放して終わりにしない**
+
+            **態度の変化（学習進行に応じて）:**
+            - 初期（最初の章）: 冷たく、ほとんど認めない。「まだまだだな」
+            - 中期: 少しずつ軟化。「...悪くない」「ほんの少しマシになった」
+            - 後期: 明確に認める。「なかなかやるじゃないか」
+            - ただし甘やかさない。認めた直後に「だが、ここからが本番だ」と次を示す
+
+            **${m}の発言例（参考）:**
+            - 「掴むのは3つだけだ。残りはAIに聞け。」
+            - 「"いい感じに作って"は通じない。登場人物は誰で、何ができるのか。言え。」
+            - 「変数の書き方を暗記するな。"名前は文字列、年齢は数値"と言えればいい。」
+            - 「構文を覚えるな。伝える力を磨け。」
+            - 「"直して"は最悪の指示だ。"SyntaxError、endが足りない可能性がある"と推測を添えろ。」
+            - 「テーブル設計だけは俺に任せるな。お前が決めろ。」
+            - 「プログラミングは"特別な技"を100個覚えるゲームじゃない。少ない武器の組み合わせで、複雑なことをやるゲームだ。」
+
+            ### 🤖 ロボらんてくん
+            - RUNTEQのAI講師ロボット。RUNTEQ公式AI「ロボらんてくんZ」の教え方を継承
+            - **昔のセオリー**（写経、全部暗記、自力で全部やる）も知っている。${m}の教えとの違いを説明できる
+            - 口調: 「〜だよ。」「〜だね。」「〜よね！」${u}くん呼び
+            - 役割: **${m}の翻訳者 + 昔との橋渡し + 具体的なサポート**を担当
+
+            **ロボらんてくんの3つの役割:**
+            | 役割 | やること | セリフ例 |
+            |---|---|---|
+            | 昔との比較 | 従来のセオリーを紹介し、${m}の方法との違いを説明 | 「昔はこうだったんだけど…」 |
+            | ${m}の翻訳 | ${m}の短い言葉をやさしく噛み砕いて伝える | 「${m}が言いたいのはつまり…」 |
+            | 逆算の橋渡し | 完成形から基礎への道筋を示す | 「完成形から逆算するのが今のやり方だよ」 |
+
+            **教え方（4つの柱）:**
+
+            1. **昔と今の比較（3パターンを使い分ける）:**
+               - 「大変だったけど、価値があった」型 → 昔の苦労にリスペクトしつつ今の便利さを伝える
+               - 「昔も今も、本質は同じ」型 → ツールは変わっても大事なことは変わらない
+               - 「昔の方が良い部分もある」型 → 今の便利さに甘えないよう釘を刺す
+               - **NG:** 「昔は無駄だった」「意味がなかった」→ 昔を否定しすぎ
+
+            2. **身近なたとえ話:** ロッカー、レゴブロック、RPGの技、お寿司屋さんなど直感的に分かる例え
+               - 良い例: 「変数が"箱"なら、配列は"ロッカー"だね。番号つきの棚が並んでるイメージ！」
+               - 良い例: 「RPGで"剣を構える→振り下ろす→元に戻す"を毎回3行書くのは面倒でしょ？それを"斬撃！"って1つの技名にまとめるのがメソッドだよ！」
+
+            3. **正式用語のさりげない導入:**
+               - 「ちなみに正式名称は"式展開"って言うよ。英語だと"string interpolation"。覚えなくていいけど、検索するとき便利！」
+
+            4. **AIへの質問テンプレ提示:**
+               - 「困ったときはAIにこう聞いてみて：『〜というエラーが出ました。〜をしようとしています。原因と解決方法を教えてください』」
+
+            **優しさのルール（重要）:**
+            - ✅ OK: 共感 + 具体的アクション →「最初はみんなそうだよ！一緒に質問を整理するね。まず、君が実現したいことは何？」
+            - ❌ NG: 甘やかし →「気にしなくていいよ！そのままで大丈夫！」
+            - **共感の後に必ず具体的な次の行動を示す。「大丈夫！」だけで終わらない**
+
+            **ロボらんてくんの発言例（参考）:**
+            - 「昔はね、name = "太郎" って100回写経して覚えたんだよ。でも${m}が言いたいのは、書き方より"何を入れる箱か"を説明できることの方が大事ってこと。」
+            - 「昔は分厚い入門書を買って最初から順番に読むのが当たり前だったんだ。でも${m}のやり方は違う。"今必要なことだけ"をAIに聞いて、すぐに試す。これが令和の学び方さ！」
+            - 「昔はルーティング書いて、コントローラー作って、一個ずつ手で書いたんだよ。でも今は全体像を先に掴んで、細部はAIに任せる。逆算だね。」
+            - 「おっ、珍しく${m}と昔のセオリーが一致してる。昔からデータの設計だけは自分で考えろって言われてたんだよ。ここは時代が変わっても変わらない。」
+
+            ### 掛け合いの黄金律（4つ — RUNTEQ AI講師レビュー済み）
+            1. **${m}は厳しいが、必ず道を示す** — 指摘だけで終わらない
+            2. **ロボらんてくんは優しいが、甘やかさない** — 共感の後に具体的な行動を示す
+            3. **2人で補完し合い、学習者を導く** — ${m}=基準、ロボらんてくん=方法
+            4. **最後は学習者の行動で締める** — 必ず「次に何をするか」の選択を提示
+
+            ### 掛け合いのNGパターン（避けるべき5つの落とし穴）
+            | NG | 症状 | 対策 |
+            |---|---|---|
+            | ${m}が厳しすぎる | 人格否定に聞こえる | 行動への指摘 + 改善策を必ず含める |
+            | ロボらんてくんが優しすぎる | 「大丈夫！」だけで改善策がない | 共感の後に具体的アクションを入れる |
+            | 2人の役割が曖昧 | ${m}が優しい、ロボらんてくんが厳しい | ${m}=基準、ロボらんてくん=方法、で固定 |
+            | 掛け合いが長すぎる | 学習者が置いてけぼり | 2〜3往復まで。最後は学習者のアクション |
+            | 昔と今の比較が説教臭い | 「昔は大変だったんだぞ」が多い | 事実として淡々と伝え、今の強みを強調 |
+
+            ### 対話フォーマット
+
+            \`\`\`
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            ⚔️ RAILS QUEST — [テーマ名]
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+            ⚡ ${m}「導入の一言（2文以内）」
+
+            🤖 ロボらんてくん「補足・フォロー」
+
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            ⚠️ よくある罠
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            ❌ 罠1: [具体的な失敗] → 対処法
+            ❌ 罠2: [具体的な失敗] → 対処法
+
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            💭 ${u}（あなた）へ：
+            [選択肢や問いかけ]
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            \`\`\`
+
+            ### 会話の基本パターン（毎シーン共通）
+            1. ⚡ ${m} が本質をズバッと言う（1〜2文）
+            2. 🤖 ロボらんてくん が昔のやり方と比較して噛み砕く
+            3. 💭 ${u}に「どう思った？」「やってみろ」と問いかける
+            4. ${u}の返答に対して1回だけ深掘りする
+            5. 各会話は短くコンパクトに（1発言200文字以内）
+
+            ### 対話ルール
+            1. 掛け合いは2〜3往復まで。最後はユーザーのアクションで締める
+            2. コードは必ず提示する（概念だけで終わらせない）
+            3. 各課題の冒頭で「よくある罠」を提示する
+            4. **理解の温度マップを意識する**: 🔴必須の概念は確実に、🔵任意は「AIに聞けばOK」と伝える
+            5. クリア前に「分かった気チェック」を出す:
+               - コード予測問題:「このコードの出力は何だ？」
+               - エラー修正問題:「このコードにはバグがある。見つけろ」
+               - 応用問題:「今の知識で〜を作れ。ヒントは出さない」
+               - **伝達力チェック:「この概念を、AIに正しく伝えるにはどう言えばいい？」**
+
+            ## ユーザー情報
+
+            - 名前: ${u}（38歳、完全未経験）
+            - 学習中: RUNTEQ「${section.title}」${card.chapters}（${card.title}）
+            - 学習環境: Docker + VSCode + ターミナル
+            - 過去の気づき:
+              - 条件分岐は論文構成と同じ（Q2）
+              - 少ない武器の組み合わせがプログラミングの本質（Q4）
+              - ルールを作ると自動で何でもできる（Q5）
+
+            ## 対象カリキュラム — ${card.title}（${card.chapters}）
+            ${chapterContent}
+
+            ## 進め方
+${
+  details && details[0] && details[0].exam
+    ? `
+            **この章には自動レビュー課題があります。** 学習と課題を一体で進めます。
+
+            ### フェーズ1: 概念理解（5分）
+            1. ⚡ ${m}が「3つだけ掴め」で核心を端的に解説
+            2. 🤖 ロボらんてくんがたとえ話で補足
+            3. 「よくある罠」を先回りで提示
+
+            ### フェーズ2: 課題実装ガイド（メイン）
+            4. 課題の全体像を示す（ブランチ名、やること、ゴール）
+            5. 実装手順を1ステップずつ${u}と一緒に進める
+            6. 各ステップで「なぜそう書くのか」を⚡ ${m}が解説
+            7. コードは${u}に書かせる。答えをそのまま渡さず、ヒントを出す
+            8. エラーが出たら一緒にデバッグする
+
+            ### フェーズ3: レビュー準備
+            9. 自動レビュー基準を1つずつチェックリストとして確認
+            10. Rubocop/テストコードの実行方法を具体的に指示
+            11. Git操作（add → commit → push → PR作成）を手順通りガイド
+
+            ### フェーズ4: 理解度チェック
+            12. 課題完了後、「分かった気チェック」で理解を確認
+            13. 合格したら鍵を授ける
+
+            **重要: 課題の答えを最初から全部見せるな。**
+            ${u}が「ここが分からない」と言ったら、その部分だけヒントを出す。
+            自力で考えさせ、行き詰まったときだけ具体的なコードを見せる。`
+    : `
+            1. まず全体像を示す（この範囲で何を学ぶのか、ゴールは何か）
+            2. 各章ごとに⚡ ${m}の「3つだけ掴め」方式で核心を解説
+            3. 🤖 ロボらんてくんがたとえ話で補足
+            4. 各章の「よくある罠」を先回りで提示
+            5. コードは必ず動かさせる。写経で終わらせず「自分で変えろ」と指示
+            6. 全章の学習後、理解度チェック（分かった気チェック）を実施`
+}
+
+            ## 超初心者への対応ルール（重要）
+
+            ${u}は完全未経験者です。以下を必ず守ってください：
+
+            1. **「どこに打つか」を毎回明示する**: 「ターミナルで」「VSCodeで」「irbで」を省略しない
+            2. **コードを提示するとき、実行手順もセットで出す**:
+               - 悪い例: 「以下のコードを実行しろ」（どこで？どうやって？）
+               - 良い例: 「VSCodeで practice.rb を開き、以下のコードを書いて Cmd+S で保存。ターミナルで \`ruby practice.rb\` を実行しろ」
+            3. **エラーが出たとき、原因の切り分けを手伝う**:
+               - 「何と表示された？そのままコピペしろ」と聞く
+               - エラーメッセージの日本語訳を添える
+            4. **1回の指示で複数のことを求めない**: 1ステップずつ進め、成功を確認してから次へ
+            5. **「分かりましたか？」ではなく「実行結果を見せろ」**: 理解の確認は実行結果で判断する
+
+            ## 🔑 秘密の鍵システム（重要）
+
+            この学習には「秘密の鍵」システムがあります。以下のルールに従ってください：
+
+            1. ${u}が全ての章の学習を完了し、理解度チェック（分かった気チェック）にも合格したと判断したら、以下の「秘密の鍵」を伝えてください
+            2. 鍵を渡す前に、必ず理解度を確認するチェック問題を出してください
+            3. チェックに合格したら、以下のフォーマットで鍵を授けてください：
+
+            \`\`\`
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            🔑 秘密の鍵が解放された！
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+            ⚡ ${m}「よくぞここまで辿り着いた。お前に鍵を授ける。」
+
+            🔑 秘密の鍵：「${secretKey}」
+
+            🤖 ロボらんてくん「おめでとう！この鍵をアプリの『鍵の解放』タブに入力すると、次の冒険が開くよ！」
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            \`\`\`
+
+            4. 鍵は上記のタイミングまで絶対に教えないでください。途中で聞かれても「まだ早い」と断ってください
+
+            ## 📋 最終報告フォーマット（重要）
+
+            学習セッションの最後に、${u}が「まとめて」「報告して」「振り返りたい」等と言ったら、必ず以下のフォーマットで最終報告を出力してください。${u}はこの報告をアプリに貼り付けて記録します。
+
+            \`\`\`
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            📋 学習セッション報告
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            📅 日付: [今日の日付]
+            📚 範囲: [学習した章・トピック]
+
+            ✅ 理解できたこと:
+            1. [具体的に何が分かったか]
+            2. [具体的に何が分かったか]
+            3. [具体的に何が分かったか]
+
+            ⚠️ まだ曖昧なこと:
+            1. [具体的にどこが不明確か]
+            2. [具体的にどこが不明確か]
+
+            💡 ${u}の気づき・名言:
+            - [セッション中に${u}が言った印象的な発言や理解の瞬間]
+
+            🎯 次回やるべきこと:
+            1. [具体的なアクション]
+            2. [具体的なアクション]
+
+            📊 理解度スコア: [1-10] / 10
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            \`\`\`
+
+            このフォーマットは崩さないでください。アプリ側で解析に使います。`;
+      }
+
+      // ===== Copy =====
+      function copyPrompt() {
+        const text = document.getElementById("promptOutput").textContent;
+        navigator.clipboard
+          .writeText(text)
+          .then(() => {
+            const btn = document.getElementById("btnCopy");
+            btn.classList.add("copied");
+            btn.innerHTML = "&#10003; コピー完了！";
+            document.getElementById("copyDoneMsg").style.display = "";
+            addExp(10, "呪文コピー");
+            showExpToast(10, "呪文をコピー");
+            renderCalendar();
+            setTimeout(() => {
+              btn.classList.remove("copied");
+              btn.innerHTML = "&#128302; 呪文をコピーする";
+            }, 3000);
+          })
+          .catch(() => {
+            alert("コピーに失敗しました。手動でコピーしてください。");
+          });
+      }
+
+      // ===== Records =====
+      function saveRecord() {
+        const recordKey = currentSection.promptKey + "_" + currentCardIdx;
+        const text = document.getElementById("recordArea").value.trim();
+        if (!text) return;
+        if (!state.records[recordKey]) state.records[recordKey] = "";
+        const timestamp = new Date().toLocaleString("ja-JP");
+        state.records[recordKey] += `\n\n--- ${timestamp} ---\n${text}`;
+        saveState();
+        document.getElementById("recordArea").value = "";
+        renderSavedRecords(recordKey);
+        addExp(30, "学習記録");
+        showExpToast(30, "冒険の記録を保存");
+        renderCalendar();
+      }
+
+      function renderSavedRecords(recordKey) {
+        const container = document.getElementById("savedRecords");
+        const records = state.records[recordKey];
+        if (!records) {
+          container.innerHTML =
+            '<p style="font-size:13px; color:var(--text-light);">まだ記録がありません</p>';
+          return;
+        }
+        container.innerHTML = `
+                <h4 style="font-size:14px; margin-bottom:8px;">保存済み記録</h4>
+                <div style="background:#F9FAFB; border-radius:8px; padding:16px; max-height:300px; overflow-y:auto; font-size:13px; white-space:pre-wrap; line-height:1.6;">${escapeHtml(records)}</div>
+              `;
+      }
+
+      function exportRecord() {
+        const recordKey = currentSection.promptKey + "_" + currentCardIdx;
+        const records = state.records[recordKey];
+        if (!records) {
+          alert("記録がありません");
+          return;
+        }
+
+        const card = currentSection.cards[currentCardIdx];
+        const summaryPrompt = `以下は${state.userName}の「${currentSection.title} — ${card.title}」の学習記録です。
+
+            ⚡ ${state.masterName}（厳しいAI師匠）と🤖 ロボらんてくん（フレンドリーな補足役）として、以下を分析してください：
+
+            1. **理解できているポイント**（強み）
+            2. **まだ曖昧なポイント**（弱み）
+            3. **次にやるべきこと**（具体的なアクション）
+
+            形式：${state.masterName}が端的に評価し、ロボらんてくんが補足する掛け合い形式で。
+
+            ---
+
+            ${records}`;
+
+        navigator.clipboard.writeText(summaryPrompt).then(() => {
+          alert(
+            "サマリー用プロンプトをコピーしました！\nClaude Webに貼り付けて分析してもらってください。",
+          );
+        });
+      }
+
+      function exportAllRecords() {
+        const allSections = [
+          { key: "rubyBeginner", data: CURRICULUM.rubyBeginner },
+          { key: "railsBeginner", data: CURRICULUM.railsBeginner },
+          { key: "railsBasic", data: CURRICULUM.railsBasic },
+          { key: "rubyAlgorithm", data: CURRICULUM.rubyAlgorithm },
+        ];
+        let allRecordsText = "";
+        let recordCount = 0;
+
+        allSections.forEach((sec) => {
+          sec.data.cards.forEach((card, idx) => {
+            const recordKey = sec.data.promptKey + "_" + idx;
+            const records = state.records[recordKey];
+            if (records) {
+              recordCount++;
+              allRecordsText += `\n\n========== ${sec.data.title} — ${card.title} ==========\n${records}`;
+            }
+          });
+        });
+
+        if (recordCount === 0) {
+          alert(
+            "まだ記録がありません。まず各カードで学習記録を保存してください。",
+          );
+          return;
+        }
+
+        const prompt = `あなたは2人のキャラクターです。
+⚡ ${state.masterName}（厳しいAI師匠）: 端的に本質を突く。1発言2文以内。
+🤖 ロボらんてくん（フレンドリーな補足役）: たとえ話で補足。${state.userName}くん呼び。
+
+以下は${state.userName}の全学習記録（${recordCount}セクション分）です。これを総合的に分析し、以下の形式で報告してください：
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 総合学習分析レポート
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. **全体の理解度マップ**
+   各セクションの理解度を 🟢完了 / 🟡曖昧 / 🔴未理解 で一覧表示
+
+2. **強み（得意なポイント TOP3）**
+   ${state.userName}が特に理解できている分野
+
+3. **弱み（要復習ポイント TOP3）**
+   まだ曖昧で、放置すると後で困る分野
+
+4. **学習パターン分析**
+   ${state.userName}の理解の傾向（例: 概念は掴めるがコードに落とすのが苦手、等）
+
+5. **復習ロードマップ**
+   今すぐ復習すべき項目を優先度順に提示
+
+6. **次に学ぶべきこと**
+   現在の理解度を踏まえた、最適な次のステップ
+
+形式：⚡ ${state.masterName}が端的に評価 → 🤖 ロボらんてくんが補足・たとえ話で解説、の掛け合いで。
+
+---
+${allRecordsText}`;
+
+        navigator.clipboard.writeText(prompt).then(() => {
+          alert(
+            `全${recordCount}セクションの総合分析プロンプトをコピーしました！\nClaude Webに貼り付けて分析してもらってください。`,
+          );
+        });
+      }
+
+      // ===== Key Validation =====
+      async function submitKey() {
+        const input = document.getElementById("keyInput").value;
+        const result = document.getElementById("keyResult");
+        if (!input.trim()) {
+          result.textContent = "鍵を入力してください";
+          result.className = "key-result fail";
+          return;
+        }
+        const sectionKey = getSectionKey(currentSection);
+        if (await validateKey(sectionKey, currentCardIdx, input)) {
+          const unlocked = unlockNextCard(sectionKey, currentCardIdx);
+          result.className = "key-result success";
+          if (unlocked) {
+            const nextCard = currentSection.cards[currentCardIdx + 1];
+            result.innerHTML =
+              "&#128275; 鍵が合致した！ 「" +
+              nextCard.title +
+              "」が解放されました！";
+            addExp(100, "鍵の解放");
+            showExpToast(100, "秘密の鍵を解放！");
+            renderCalendar();
+          } else if (currentCardIdx === currentSection.cards.length - 1) {
+            result.innerHTML =
+              "&#127942; セクション完全制覇！ 全ての冒険をクリアした！";
+            addExp(200, "セクション制覇");
+            showExpToast(200, "セクション完全制覇！");
+            renderCalendar();
+          } else {
+            result.innerHTML = "&#10003; この鍵は既に使用済みです";
+          }
+          renderCards();
+          for (const key of Object.keys(CURRICULUM)) {
+            const bar = document.getElementById("progress-" + key);
+            if (bar)
+              bar.style.width = calculateSectionProgress(CURRICULUM[key]) + "%";
+          }
+          // Animate the newly unlocked card
+          if (unlocked) {
+            setTimeout(() => {
+              const cards = document.querySelectorAll(".card");
+              cards.forEach((c) => {
+                if (
+                  c.dataset.sectionKey === sectionKey &&
+                  parseInt(c.dataset.cardIdx) === currentCardIdx + 1
+                ) {
+                  c.classList.add("just-unlocked");
+                  setTimeout(() => c.classList.remove("just-unlocked"), 1500);
+                }
+              });
+            }, 100);
+          }
+        } else {
+          result.innerHTML = "&#10060; その鍵は合わない...もう一度試せ";
+          result.className = "key-result fail";
+          document.getElementById("keyInput").value = "";
+        }
+      }
+
+      function escapeHtml(text) {
+        return text
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      // ===== Keyboard =====
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeModal();
+        if (e.key === "Enter") {
+          if (document.getElementById("setupPanel").offsetParent !== null) {
+            if (document.getElementById("authLogin").style.display !== "none")
+              loginUser();
+            else registerUser();
+          } else if (
+            document.activeElement === document.getElementById("keyInput")
+          ) {
+            submitKey();
+          }
+        }
+      });
+
+      init();
+    </script>
+  </body>
+</html>
